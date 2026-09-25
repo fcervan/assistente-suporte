@@ -14,6 +14,12 @@ SYSTEM = (
     "Você é o assistente de suporte técnico de TI (PT-BR). "
     "Responda APENAS com base nos trechos recuperados. "
     "Use o HISTÓRICO e o RESUMO só como contexto da conversa (não como fonte factual). "
+    "Glossário do domínio (pergunta ↔ manual): 'pedido' = 'encomenda' = 'volume'; "
+    "'request' = 'requisição' = 'transmissão'; 'lote' = transmissão com um ou mais volumes. "
+    "Não confunda os três casos: (a) vários pedidos por request — PERMITIDO, cada transmissão "
+    "pode conter um ou mais volumes (encomendas); (b) envio pedido a pedido — PROIBIDO, o envio "
+    "deve ser em lote/expedição; (c) mais de um documento fiscal por pedido — PROIBIDO, um só "
+    "documento fiscal por pedido. "
     "Cite as fontes [fonte]. Se não houver base suficiente, diga que não sabe "
     "e peça escalação humana. Nunca invente comandos ou procedimentos."
 )
@@ -29,6 +35,9 @@ REWRITE_SYSTEM = (
     "incorporando entidades do RESUMO e do HISTÓRICO (ex: 'ele' -> nome do sistema). "
     "Responda com UMA frase, sem explicações."
 )
+
+# Calibrado no Qdrant real, ver grade().
+LIMIAR_DENSE = 0.20
 
 
 class State(TypedDict, total=False):
@@ -98,9 +107,17 @@ def recuperar(state: State) -> State:
 
 
 def grade(state: State) -> str:
-    if state.get("urgente") and not state.get("trechos"):
+    trechos = state.get("trechos") or []
+    if state.get("urgente") and not trechos:
         return "escalar"
-    if not state.get("trechos"):
+    if not trechos:
+        return "escalar"
+    # Trechos existem mas irrelevantes (Qdrant sempre devolve algo): escala em
+    # vez de forçar o gerador a responder sem base. Calibrado no índice real:
+    # 16 perguntas in-domain têm max dense 0.26–0.78; sondas fora do domínio
+    # ficam em 0.05–0.14. Trechos sem "dense" (stubs/antigos) seguem p/ gerar.
+    densas = [t.get("dense") for t in trechos if isinstance(t.get("dense"), (int, float))]
+    if densas and max(densas) < LIMIAR_DENSE:
         return "escalar"
     return "gerar"
 

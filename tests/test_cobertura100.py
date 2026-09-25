@@ -373,6 +373,53 @@ def test_vector_client_create_e_vazio(monkeypatch):
     assert vq.buscar("nada", top_k=4) == []
 
 
+def test_buscar_expande_sinonimos_e_funde(monkeypatch):
+    for m in ("src.vector_qdrant", "src.embeddings"):
+        monkeypatch.delitem(sys.modules, m, raising=False)
+    _sem_bm25(monkeypatch)
+    qc = types.ModuleType("qdrant_client")
+    models = types.ModuleType("qdrant_client.models")
+    models.Distance = types.SimpleNamespace(COSINE="c")
+    models.VectorParams = lambda size, distance: (size, distance)
+    models.PointStruct = lambda **k: k
+
+    def payload(texto):
+        return {"texto": texto, "fonte": "m.pdf", "pagina": 7, "secao": "4. Metodo"}
+
+    class Client:
+        def __init__(self, url=None):
+            pass
+
+        def collection_exists(self, name):
+            return True
+
+        def query_points(self, **k):
+            pts = [
+                types.SimpleNamespace(
+                    score=0.44,
+                    payload=payload("cada transmissao pode conter um ou mais volumes"),
+                ),
+                types.SimpleNamespace(
+                    score=0.10, payload=payload("texto irrelevante de outro assunto")
+                ),
+            ]
+            return types.SimpleNamespace(points=pts)
+
+    qc.QdrantClient = Client
+    qc.models = models
+    monkeypatch.setitem(sys.modules, "qdrant_client", qc)
+    monkeypatch.setitem(sys.modules, "qdrant_client.models", models)
+    import src.embeddings as emb
+
+    assert "encomenda" in emb.expandir_query("mais de um pedido por request?")
+    assert emb.expandir_query("oi") == "oi" and emb.expandir_query("") == ""
+    monkeypatch.setattr(emb, "embed_query", lambda q: [0.0])
+    import src.vector_qdrant as vq
+
+    res = vq.buscar("posso enviar mais de um pedido por request?", top_k=2)
+    assert len(res) == 2 and res[0]["dense"] == 0.44
+
+
 def test_grade_escala_urgente_sem_base():
     from src import graph
 
