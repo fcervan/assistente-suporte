@@ -169,12 +169,28 @@ def ingest(files: list[UploadFile] = File(...), user: dict = Depends(auth.admin)
         destino = raw / f.filename
         destino.write_bytes(f.file.read())
         info = ing.converter_arquivo(destino, proc)
-        texto = Path(info["md_path"]).read_text(encoding="utf-8")
+        doc_id = ""
         if destino.suffix.lower() in {".csv", ".xlsx"}:
-            partes = chunk_mod.chunk_csv_linhas(texto)
+            texto = Path(info["md_path"]).read_text(encoding="utf-8")
+            partes = [{"texto": p, "fonte": f.filename, "pagina": None, "secao": "",
+                       "chunk_index": i, "doc_id": f.filename}
+                      for i, p in enumerate(chunk_mod.chunk_csv_linhas(texto))]
         else:
-            partes = chunk_mod.chunk_texto(texto, config.CHUNK_SIZE, config.CHUNK_OVERLAP)
-        n = vq.upsert([{"texto": p, "fonte": f.filename} for p in partes])
+
+            from .reingest_v2 import doc_meta
+
+            fonte, doc_id, doc = doc_meta(Path(info["json_path"]))
+            fonte = f.filename  # nome real do upload prevalece
+            if isinstance(doc, dict) and (doc.get("texts") or doc.get("tables")):
+                partes = chunk_mod.chunk_docling(doc, fonte=fonte, doc_id=doc_id)
+            else:
+                texto = Path(info["md_path"]).read_text(encoding="utf-8")
+                partes = [{"texto": p, "fonte": fonte, "pagina": None, "secao": "",
+                           "chunk_index": i, "doc_id": doc_id}
+                          for i, p in enumerate(
+                              chunk_mod.chunk_texto(texto, config.CHUNK_SIZE,
+                                                    config.CHUNK_OVERLAP))]
+        n = vq.upsert(partes)
         total_chunks += n
         relatorio.append({"arquivo": f.filename, "chunks": n, **info})
     return {"arquivos": len(relatorio), "chunks": total_chunks, "detalhe": relatorio}

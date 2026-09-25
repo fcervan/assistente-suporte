@@ -12,3 +12,4 @@ EMBED_MODEL = os.getenv(
 )
 CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "800"))
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "120"))
+VERSAO_CHUNK = os.getenv("VERSAO_CHUNK", "v2")

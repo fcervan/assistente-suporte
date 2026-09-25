@@ -15,5 +15,6 @@ langchain-groq
 langchain-huggingface
 sentence-transformers
 rank-bm25
+nltk  # só SnowballStemmer PT (algorítmico, sem download de corpora)
 qdrant-client
 pandas
