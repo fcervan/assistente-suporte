@@ -3,6 +3,7 @@
    Pastel descartado.
    ============================================================ */
 :root {
+  --panel-max: min(1760px, 100%);
   --r-sm: 4px;
   --r-md: 8px;
   --r-lg: 12px;
@@ -74,7 +75,7 @@ html, body {
     radial-gradient(45% 35% at 70% 15%, rgba(70, 95, 120, 0.08), transparent 60%),
     radial-gradient(140% 140% at 50% 50%, #14171c 0%, #0c0e12 55%, #08090b 100%);
   overflow: hidden;
-  padding: var(--sp-4);
+  padding: 16px;
 }
 
 .stage::before {
@@ -100,9 +101,9 @@ html, body {
 .panel {
   position: relative;
   width: 100%;
-  max-width: 1280px;
+  max-width: var(--panel-max);
   margin: 0 auto;
-  min-height: calc(100vh - 48px);
+  min-height: calc(100vh - 32px);
   border-radius: var(--r-xl);
   background:
     radial-gradient(70% 55% at 18% 8%, rgba(95, 163, 217, 0.05), transparent 60%),
@@ -443,4 +444,90 @@ html, body {
     overflow-y: auto;
   }
   .sidebar.open { left: 0; }
+  .collapse-btn { display: none; }
 }
+
+/* DESKTOP — sidebar recolhida (só ícones + tooltip nativo via title) */
+@media (min-width: 769px) {
+  .sidebar { transition: width 0.2s ease; }
+  .sidebar.collapsed { width: 64px !important; padding-left: 8px !important; padding-right: 8px !important; }
+  .sidebar.collapsed .nav-label,
+  .sidebar.collapsed .brand-text,
+  .sidebar.collapsed .sidebar-foot { display: none; }
+  .sidebar.collapsed .nav-item { justify-content: center; padding: 9px 0; }
+}
+
+.collapse-btn {
+  cursor: pointer;
+  border: var(--b-subtle) solid rgba(255,255,255,0.12);
+  background: linear-gradient(180deg, #2a2f38, #20242b);
+  color: var(--text-mid);
+  border-radius: var(--r-md);
+  width: 28px;
+  height: 28px;
+  font-size: 14px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.collapse-btn:hover { color: var(--text-hi); }
+
+/* CHAT — layout padrão mercado (lista fixa + composer sticky) */
+.chat-shell { display: flex; gap: 12px; align-items: stretch; }
+.chat-threads { width: 260px; flex-shrink: 0; max-height: calc(100vh - 140px); overflow: auto; }
+.chat-main { flex: 1; min-width: 0; display: flex; flex-direction: column; height: calc(100vh - 140px); min-height: 420px; }
+.chat-scroll { flex: 1; overflow-y: auto; min-height: 0; }
+.chat-composer { position: sticky; bottom: 0; padding-top: 12px; background: transparent; }
+.chat-composer textarea.input {
+  resize: none;
+  max-height: 160px;
+  min-height: 42px;
+  line-height: 1.45;
+}
+.thread-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.thread-meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 4px; }
+.thread-actions { display: flex; gap: 2px; }
+.thread-actions button {
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 2px 5px;
+  border-radius: 6px;
+}
+.thread-actions button:hover { color: var(--text-hi); background: rgba(255,255,255,0.06); }
+
+@media (max-width: 900px) {
+  .chat-shell { flex-direction: column; }
+  .chat-threads { width: 100%; max-height: 220px; }
+  .chat-main { height: calc(100vh - 320px); }
+}
+
+/* DROPZONE */
+.dropzone {
+  border: 1.5px dashed rgba(95,163,217,0.35);
+  border-radius: var(--r-md);
+  padding: 28px 18px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13.5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  background: rgba(95,163,217,0.03);
+}
+.dropzone.active {
+  border-color: var(--blue-400);
+  background: rgba(95,163,217,0.10);
+  color: var(--text-hi);
+}
+.file-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; font-size: 13px; color: var(--text-mid); border-bottom: 1px solid rgba(255,255,255,0.05); }
+
+/* TABELAS (usuários / observabilidade) */
+.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tbl th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.tbl td { padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); color: var(--text-mid); vertical-align: top; }
+.tbl tr:hover td { background: rgba(255,255,255,0.02); }
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.stat-card { padding: 14px; }
+.stat-num { font-size: 22px; font-weight: 700; color: var(--text-hi); }
+.stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }

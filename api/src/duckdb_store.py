@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import threading
 import uuid
 from pathlib import Path
@@ -42,9 +43,16 @@ def init_db() -> None:
               id INTEGER PRIMARY KEY, ticket_id INTEGER, user_id INTEGER,
               thread_id VARCHAR, pergunta VARCHAR, resposta VARCHAR,
               escalado BOOLEAN DEFAULT FALSE,
+              busca VARCHAR DEFAULT '', trechos VARCHAR DEFAULT '[]',
+              provedor VARCHAR DEFAULT '',
               criado_em TIMESTAMP DEFAULT current_timestamp)"""
         )
         con.execute("CREATE SEQUENCE IF NOT EXISTS seq_interacoes START 1")
+        # Migração aditiva p/ DBs criados antes da observabilidade (post-mortem RAG):
+        # busca reescrita + trechos (JSON) + provedor por interação.
+        con.execute("ALTER TABLE interacoes ADD COLUMN IF NOT EXISTS busca VARCHAR DEFAULT ''")
+        con.execute("ALTER TABLE interacoes ADD COLUMN IF NOT EXISTS trechos VARCHAR DEFAULT '[]'")
+        con.execute("ALTER TABLE interacoes ADD COLUMN IF NOT EXISTS provedor VARCHAR DEFAULT ''")
         con.execute(
             """CREATE TABLE IF NOT EXISTS threads(
               id VARCHAR PRIMARY KEY, user_id INTEGER,
@@ -93,6 +101,67 @@ def get_user_by_email(email: str) -> dict | None:
         if not row:
             return None
         return {"id": row[0], "nome": row[1], "email": row[2], "hash": row[3], "role": row[4]}
+
+
+def list_users(limit: int = 200) -> list[dict]:
+    with _lock, connect() as con:
+        try:
+            rows = con.execute(
+                "SELECT id,nome,email,role,criado_em FROM users ORDER BY id ASC LIMIT ?",
+                [limit],
+            ).fetchall()
+        except Exception:
+            return []
+        return [
+            {"id": r[0], "nome": r[1], "email": r[2], "role": r[3], "criado_em": str(r[4])}
+            for r in rows
+        ]
+
+
+def get_user_by_id(uid: int) -> dict | None:
+    with _lock, connect() as con:
+        row = con.execute("SELECT id,nome,email,hash,role FROM users WHERE id=?", [uid]).fetchone()
+        if not row:
+            return None
+        return {"id": row[0], "nome": row[1], "email": row[2], "hash": row[3], "role": row[4]}
+
+
+def update_user(uid: int, nome: str | None = None, role: str | None = None) -> dict | None:
+    with _lock, connect() as con:
+        row = con.execute("SELECT id FROM users WHERE id=?", [uid]).fetchone()
+        if not row:
+            return None
+        if nome is not None:
+            con.execute("UPDATE users SET nome=? WHERE id=?", [nome, uid])
+        if role is not None:
+            role = "admin" if role == "admin" else "user"
+            con.execute("UPDATE users SET role=? WHERE id=?", [role, uid])
+    return get_user_by_id(uid)
+
+
+def set_user_hash(uid: int, hash_: str) -> bool:
+    with _lock, connect() as con:
+        con.execute("UPDATE users SET hash=? WHERE id=?", [hash_, uid])
+        row = con.execute("SELECT id FROM users WHERE id=?", [uid]).fetchone()
+        return bool(row)
+
+
+def delete_user(uid: int) -> None:
+    with _lock, connect() as con:
+        con.execute("DELETE FROM users WHERE id=?", [uid])
+
+
+def ensure_admin(email: str, nome: str = "Admin", hash_: str = "") -> dict | None:
+    """Garante que um email seja admin (bootstrap fcervan@local)."""
+    u = get_user_by_email(email)
+    if not u:
+        if not hash_:
+            return None
+        return create_user(nome, email, hash_, "admin")
+    if u["role"] != "admin":
+        update_user(u["id"], role="admin")
+        return get_user_by_id(u["id"])
+    return u
 
 
 def titulo_de(pergunta: str, limite: int = 60) -> str:
@@ -249,15 +318,51 @@ def mensagens_thread(user_id: int, thread_id: str, limit: int = 100) -> list[dic
         ]
 
 
+def _compactar_trechos(trechos: list[dict] | None) -> str:
+    """Trechos do RAG -> JSON compacto p/ post-mortem (sem o texto integral)."""
+    return json.dumps(
+        [
+            {
+                "fonte": t.get("fonte", ""),
+                "pagina": t.get("pagina"),
+                "secao": str(t.get("secao", ""))[:80],
+                "score": t.get("score", 0),
+                "dense": t.get("dense", 0),
+            }
+            for t in (trechos or [])
+        ],
+        ensure_ascii=False,
+    )
+
+
 def log_interacao(
-    user_id: int, thread_id: str, pergunta: str, resposta: str, escalado: bool
+    user_id: int,
+    thread_id: str,
+    pergunta: str,
+    resposta: str,
+    escalado: bool,
+    busca: str = "",
+    trechos: list[dict] | None = None,
+    provedor: str = "",
 ) -> None:
     with _lock, connect() as con:
         tid = con.execute("SELECT nextval('seq_interacoes')").fetchone()[0]
         con.execute(
-            "INSERT INTO interacoes(id,ticket_id,user_id,thread_id,pergunta,resposta,escalado)"
-            " VALUES (?,?,?,?,?,?,?)",
-            [tid, None, user_id, thread_id, pergunta, resposta, escalado],
+            "INSERT INTO interacoes(id,ticket_id,user_id,thread_id,pergunta,resposta,escalado,"
+            "busca,trechos,provedor)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?)",
+            [
+                tid,
+                None,
+                user_id,
+                thread_id,
+                pergunta,
+                resposta,
+                escalado,
+                busca or "",
+                _compactar_trechos(trechos),
+                provedor or "",
+            ],
         )
         try:
             con.execute(
@@ -271,11 +376,99 @@ def log_interacao(
 def ultimas_interacoes(user_id: int, limit: int = 20) -> list[dict]:
     with _lock, connect() as con:
         rows = con.execute(
-            "SELECT thread_id,pergunta,resposta,escalado,criado_em FROM interacoes"
+            "SELECT thread_id,pergunta,resposta,escalado,criado_em,busca,trechos,provedor"
+            " FROM interacoes"
             " WHERE user_id=? ORDER BY id DESC LIMIT ?",
             [user_id, limit],
         ).fetchall()
         return [
-            {"thread": r[0], "pergunta": r[1], "resposta": r[2], "escalado": r[3], "em": str(r[4])}
+            {
+                "thread": r[0],
+                "pergunta": r[1],
+                "resposta": r[2],
+                "escalado": r[3],
+                "em": str(r[4]),
+                "busca": r[5] or "",
+                "trechos": json.loads(r[6] or "[]"),
+                "provedor": r[7] or "",
+            }
             for r in rows
         ]
+
+
+def logs_globais(
+    limit: int = 100, somente_escalados: bool = False, provedor: str = ""
+) -> list[dict]:
+    """Visão admin global (observabilidade) com email do autor."""
+    with _lock, connect() as con:
+        q = (
+            "SELECT i.id,i.user_id,u.email,i.thread_id,i.pergunta,i.resposta,"
+            " i.escalado,i.provedor,i.busca,i.criado_em"
+            " FROM interacoes i LEFT JOIN users u ON u.id=i.user_id"
+            " WHERE 1=1"
+        )
+        params: list = []
+        if somente_escalados:
+            q += " AND i.escalado=TRUE"
+        if provedor:
+            q += " AND i.provedor=?"
+            params.append(provedor)
+        q += " ORDER BY i.id DESC LIMIT ?"
+        params.append(limit)
+        try:
+            rows = con.execute(q, params).fetchall()
+        except Exception:
+            return []
+        return [
+            {
+                "id": r[0],
+                "user_id": r[1] or 0,
+                "email": r[2] or "",
+                "thread_id": r[3] or "",
+                "pergunta": r[4] or "",
+                "resposta": r[5] or "",
+                "escalado": bool(r[6]),
+                "provedor": r[7] or "",
+                "busca": r[8] or "",
+                "em": str(r[9]),
+            }
+            for r in rows
+        ]
+
+
+def stats_globais() -> dict:
+    with _lock, connect() as con:
+        try:
+            total = con.execute("SELECT COUNT(*) FROM interacoes").fetchone()[0] or 0
+            esc = (
+                con.execute("SELECT COUNT(*) FROM interacoes WHERE escalado=TRUE").fetchone()[0]
+                or 0
+            )
+            por_prov = con.execute(
+                "SELECT COALESCE(NULLIF(provedor,''),'(vazio)'),COUNT(*)"
+                " FROM interacoes GROUP BY 1 ORDER BY 2 DESC"
+            ).fetchall()
+            por_dia = con.execute(
+                "SELECT CAST(criado_em AS DATE),COUNT(*)"
+                " FROM interacoes GROUP BY 1 ORDER BY 1 DESC LIMIT 14"
+            ).fetchall()
+            por_user = (
+                con.execute("SELECT COUNT(DISTINCT user_id) FROM interacoes").fetchone()[0] or 0
+            )
+        except Exception:
+            return {
+                "total": 0,
+                "escalados": 0,
+                "pct_escalado": 0,
+                "por_provedor": [],
+                "por_dia": [],
+                "usuarios_ativos": 0,
+            }
+        return {
+            "total": int(total),
+            "escalados": int(esc),
+            "pct_escalado": round(100 * esc / total, 1) if total else 0,
+            "por_provedor": [{"provedor": r[0], "total": int(r[1])} for r in por_prov],
+            "por_dia": [{"dia": str(r[0]), "total": int(r[1])} for r in por_dia],
+            "usuarios_ativos": int(por_user),
+        }
