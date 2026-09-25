@@ -1,0 +1,49 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: suporte-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    restart: unless-stopped
+
+  api:
+    build: ./api
+    container_name: suporte-api
+    ports:
+      - "8002:8002"
+    env_file:
+      - .env
+    environment:
+      - QDRANT_URL=http://qdrant:6333
+      - DUCKDB_PATH=/app/data/duckdb/tickets.duckdb
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - qdrant
+    restart: unless-stopped
+
+  web:
+    build: ./web
+    container_name: suporte-web
+    ports:
+      - "5175:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  # FUTURO (v2, se escrita concorrente estourar o DuckDB):
+  # postgres:
+  #   image: postgres:16
+  #   ports: ["5432:5432"]  # livre (verificado via ss)
+  #   environment:
+  #     - POSTGRES_DB=suporte
+  #     - POSTGRES_USER=suporte
+  #     - POSTGRES_PASSWORD=suporte
+  #   volumes: [pgdata:/var/lib/postgresql/data]
+
+volumes:
+  qdrant_storage:
+  # pgdata:
