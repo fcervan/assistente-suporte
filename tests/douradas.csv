@@ -1,0 +1,16 @@
+pergunta;keywords
+Como funciona a autenticação na API SmartLabel?;ICS|autentica
+O que é o método Registrar?;volumes|encomendas|Anexo B
+O que é o campo clienteCodigo?;clienteCodigo
+O que significa Response 200 - OK?;Response 200|OK
+O que significa Response 206?;parcial|206
+O que significa Response 400?;erros no envio|400
+O que significa Response 401?;autenticação|401
+Como imprimir as etiquetas?;etiqueta|impress
+A API fica disponível em quais horários?;24 horas|7 dias
+Posso enviar os pedidos um a um?;lote|proibido|pedido a pedido
+O ambiente de testes grava os dados na base?;validação|sem gravá
+Se houver falha na transmissão como fico sabendo?;síncrono|falha
+Como solicito acesso ao ambiente de testes?;tecnologia|TOTAL EXPRESS
+Mostre um exemplo de resposta de sucesso do Registrar;Response 200|exemplo
+O que é uma API segundo o manual?;integração de sistemas|Service Provider

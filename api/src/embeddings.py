@@ -1,6 +1,8 @@
 """Embeddings multilíngues PT + BM25 híbrido (RRF)."""
 from __future__ import annotations
 
+import re
+import unicodedata
 from functools import lru_cache
 
 import numpy as np
@@ -24,23 +26,59 @@ def embed_query(texto: str) -> list[float]:
     return modelo().embed_query(texto)
 
 
+def _stemmer():
+    try:
+        from functools import lru_cache
+
+        from nltk.stem.snowball import SnowballStemmer
+
+        @lru_cache(maxsize=1)
+        def _get():
+            return SnowballStemmer("portuguese")
+
+        return _get()
+    except Exception:
+        return None
+
+
 def _tok(s: str) -> list[str]:
-    return (s or "").lower().split()
+    """Normaliza (minúsculas, sem acento/pontuação) + stemming PT p/ BM25
+    casar variações ('pedidos'/'pedido', 'enviar'/'envio')."""
+    base = unicodedata.normalize("NFKD", s or "").encode("ascii", "ignore").decode()
+    toks = re.findall(r"[a-z0-9]+", base.lower())
+    stem = _stemmer()
+    if stem is None:
+        return toks
+    try:
+        return [stem.stem(t) for t in toks]
+    except Exception:
+        return toks
+
+
+def _chave(r: dict) -> tuple:
+    return (r.get("texto", ""), r.get("secao", ""), r.get("pagina"), r.get("fonte", ""))
 
 
 def fusao_rrf(r_dense: list[dict], r_bm25: list[dict], k: int = 60,
-              w_dense: float = 0.7, w_bm25: float = 0.3) -> list[dict]:
-    """Reciprocal Rank Fusion entre ranking denso e léxico."""
-    pos_d = {id(r): i for i, r in enumerate(r_dense)}
-    pos_b = {id(r): i for i, r in enumerate(r_bm25)}
-    todos = {id(r): r for r in r_dense + r_bm25}
+              w_dense: float = 0.5, w_bm25: float = 0.5) -> list[dict]:
+    """Reciprocal Rank Fusion com pesos iguais (padrão RRF).
+
+    Fusão por CONTEÚDO (texto/secao/pagina/fonte), não por id(): o BM25
+    devolve cópias dos dicts densos, e fundir por id() jamais somaria os
+    dois sinais no mesmo documento (bug que anulava o híbrido).
+    Pesos iguais permitem que um literal exato (BM25 #1, ex: 'clienteCodigo',
+    'Response 200') supere um semanticamente próximo mas sem o termo.
+    """
+    pos_d = {_chave(r): i for i, r in enumerate(r_dense)}
+    pos_b = {_chave(r): i for i, r in enumerate(r_bm25)}
+    todos = {_chave(r): r for r in r_dense + r_bm25}
     scored = []
-    for rid, r in todos.items():
+    for chave, r in todos.items():
         s = 0.0
-        if rid in pos_d:
-            s += w_dense / (k + pos_d[rid] + 1)
-        if rid in pos_b:
-            s += w_bm25 / (k + pos_b[rid] + 1)
+        if chave in pos_d:
+            s += w_dense / (k + pos_d[chave] + 1)
+        if chave in pos_b:
+            s += w_bm25 / (k + pos_b[chave] + 1)
         scored.append({**r, "score": round(s, 6)})
     return sorted(scored, key=lambda x: x["score"], reverse=True)
 
