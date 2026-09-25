@@ -35,3 +35,27 @@ class ChatOut(BaseModel):
     fontes: list[Fonte] = []
     escalado: bool = False
     provedor: str = ""
+    thread_id: str = "default"
+
+
+class ThreadOut(BaseModel):
+    id: str
+    titulo: str = "Nova conversa"
+    tem_resumo: bool = False
+    atualizado_em: str = ""
+    mensagens: int = 0
+
+
+class ThreadRenameIn(BaseModel):
+    titulo: str = Field(min_length=1, max_length=80)
+
+
+class ThreadCreateIn(BaseModel):
+    titulo: str = "Nova conversa"
+
+
+class ThreadMsg(BaseModel):
+    pergunta: str = ""
+    resposta: str = ""
+    escalado: bool = False
+    em: str = ""
