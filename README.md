@@ -22,7 +22,7 @@ memória conversacional (últimas 10 mensagens + **resumo compactado a cada 10**
 threads estilo ChatGPT (criar/continuar/renomear/apagar, tooltip com título cheio e
 data/hora `dd/mm/aaaa às hh:mm`), chat padrão mercado (textarea fixa, autoscroll),
 gestão de **usuários com perfis user/admin** e tela de **observabilidade**
-(log global + métricas: total, % escalado, por provedor) — além do **eval dourado 15/15**.
+ (log global + métricas: total, % escalado, por provedor) — além do **eval dourado 16/16**.
 
 ## Demonstração
 
@@ -128,7 +128,7 @@ assistente-suporte/
 │   ├── llm_client.py      # fallback Groq → Ollama Cloud → OpenRouter
 │   └── auth.py            # JWT + hash bcrypt (+guarda admin)
 ├── web/src/               # React 18 + Vite (Chat c/ textarea+autoscroll, Ingest c/ dropzone, Admin, Usuarios, Observabilidade, Login; sidebar colapsável)
-├── tests/                 # 79 testes + CSV dourado (15 perguntas)
+├── tests/                 # 79 testes + CSV dourado (16 perguntas)
 └── docker-compose.yml     # api :8002 + web :5175 + qdrant :6333
 ```
 
@@ -138,7 +138,7 @@ assistente-suporte/
   pesadas (Qdrant, HF, Docling) isoladas por stubs/mocks — nenhum teste custa API
 * **100% de cobertura** de `api/src` (exigido conceitualmente; `ingest_docling` e vetores
   cobertos via Docling/Qdrant dublados)
-* **Eval dourado 15/15** (`hit@4`) sobre a base real ingerida
+* **Eval dourado 16/16** (`hit@4`) sobre a base real ingerida
 * Lint + formatação com **Ruff**; pipeline **GitHub Actions** a cada push/PR
 
 ```bash
