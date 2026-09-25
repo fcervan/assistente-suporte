@@ -9,6 +9,7 @@
 [![LangGraph](https://img.shields.io/badge/langgraph-orchestration-purple)](api/src/graph.py)
 [![FastAPI](https://img.shields.io/badge/fastapi-%3A8002-teal)](api/src/main.py)
 [![React 18](https://img.shields.io/badge/react-18-61dafb)](web/src/)
+[![Docling](https://img.shields.io/badge/docling-ingest-orange)](https://github.com/docling-project/docling)
 
 RAG multiusuário de suporte técnico de TI (PT-BR): o usuário envia documentos
 (PDF/DOCX/XLSX…), conversa num chat com **memória e histórico persistente**, e recebe
