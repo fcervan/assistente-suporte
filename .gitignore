@@ -1,0 +1,13 @@
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+data/duckdb/*.duckdb
+data/duckdb/*.wal
+data/raw/*
+!data/raw/.gitkeep
+node_modules/
+web/dist/
+data/processed/*
+!data/processed/.gitkeep
