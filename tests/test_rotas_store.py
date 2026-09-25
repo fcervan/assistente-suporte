@@ -90,6 +90,46 @@ def test_store_leituras(db):
     assert lst[0]["tem_resumo"] is True and lst[0]["mensagens"] == 2
 
 
+def test_store_observabilidade_rag(db):
+    """Post-mortem RAG: busca/trechos/provedor persistidos por interação."""
+    u = store.create_user("E", "e@e", auth.hash_senha("123456"), "user")
+    store.ensure_thread(u["id"], "t9")
+    trechos = [
+        {
+            "fonte": "m.pdf",
+            "pagina": 7,
+            "secao": "4. Método Registrar",
+            "texto": "x" * 5000,  # texto integral NÃO é persistido
+            "score": 0.016,
+            "dense": 0.44,
+        }
+    ]
+    store.log_interacao(
+        u["id"], "t9", "p?", "r!", False, busca="busca x", trechos=trechos, provedor="llm"
+    )
+    ult = store.ultimas_interacoes(u["id"])
+    assert ult[0]["busca"] == "busca x" and ult[0]["provedor"] == "llm"
+    assert ult[0]["trechos"][0]["fonte"] == "m.pdf"
+    assert "texto" not in ult[0]["trechos"][0]
+
+
+def test_migracao_db_legado_sem_colunas(tmp_path, monkeypatch):
+    """DBs criados antes da observabilidade ganham busca/trechos/provedor via ALTER."""
+    monkeypatch.setattr(config, "DUCKDB_PATH", str(tmp_path / "legado.duckdb"))
+    with store.connect() as con:
+        con.execute(
+            "CREATE TABLE interacoes(id INTEGER PRIMARY KEY, ticket_id INTEGER,"
+            " user_id INTEGER, thread_id VARCHAR, pergunta VARCHAR, resposta VARCHAR,"
+            " escalado BOOLEAN DEFAULT FALSE,"
+            " criado_em TIMESTAMP DEFAULT current_timestamp)"
+        )
+        con.execute("CREATE SEQUENCE IF NOT EXISTS seq_interacoes START 1")
+    store.init_db()  # migra sem perder nada
+    store.log_interacao(1, "t", "p", "r", False, busca="b", trechos=[], provedor="regra")
+    ult = store.ultimas_interacoes(1)
+    assert ult[0]["busca"] == "b" and ult[0]["trechos"] == [] and ult[0]["provedor"] == "regra"
+
+
 def test_backfill_threads_antigas(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DUCKDB_PATH", str(tmp_path / "b.duckdb"))
     store.init_db()
@@ -249,5 +289,5 @@ def test_eval_carregar_e_norm():
     from src.eval_douradas import carregar, norm
 
     casos = carregar("tests/douradas.csv")
-    assert len(casos) == 15 and all(kws for _, kws in casos)
+    assert len(casos) == 16 and all(kws for _, kws in casos)
     assert norm("Autenticação 200!") == "autenticacao 200!"

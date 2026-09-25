@@ -56,6 +56,36 @@ def _tok(s: str) -> list[str]:
         return toks
 
 
+# Glossário SmartLabel p/ expansão de query no BM25 (chaves já normalizadas,
+# sem acento): a pergunta usa "pedido/request", o manual usa
+# "encomenda/volume/transmissão/requisição". Grupos restritos ao domínio p/
+# não puxar o falso-amigo "mais de um documento fiscal por pedido" (§4.2).
+SINONIMOS = {
+    "pedido": ["encomenda", "volume", "lote"],
+    "pedidos": ["encomenda", "encomendas", "volume", "volumes", "lote"],
+    "encomenda": ["pedido", "volume"],
+    "encomendas": ["pedido", "pedidos", "volume", "volumes"],
+    "volume": ["pedido", "encomenda"],
+    "volumes": ["pedido", "pedidos", "encomenda", "encomendas"],
+    "request": ["requisicao", "transmissao", "solicitacao"],
+    "requests": ["requisicao", "transmissao"],
+    "requisicao": ["request", "transmissao"],
+    "requisicoes": ["request", "transmissao"],
+    "transmissao": ["request", "requisicao"],
+    "transmissoes": ["request", "requisicao"],
+    "lote": ["encomendas", "volumes"],
+}
+
+
+def expandir_query(query: str) -> str:
+    """Query original + sinônimos do domínio p/ o BM25 casar pergunta↔manual
+    ('pedido por request' casa 'volumes (encomendas)' e 'transmissão')."""
+    base = unicodedata.normalize("NFKD", query or "").encode("ascii", "ignore").decode()
+    palavras = re.findall(r"[a-z0-9]+", base.lower())
+    extras = [s for p in palavras for s in SINONIMOS.get(p, [])]
+    return f"{query} {' '.join(extras)}".strip() if extras else (query or "")
+
+
 def _chave(r: dict) -> tuple:
     return (r.get("texto", ""), r.get("secao", ""), r.get("pagina"), r.get("fonte", ""))
 

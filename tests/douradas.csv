@@ -14,3 +14,4 @@ Se houver falha na transmissão como fico sabendo?;síncrono|falha
 Como solicito acesso ao ambiente de testes?;tecnologia|TOTAL EXPRESS
 Mostre um exemplo de resposta de sucesso do Registrar;Response 200|exemplo
 O que é uma API segundo o manual?;integração de sistemas|Service Provider
+Eu posso enviar mais de um pedido por request?;um ou mais volumes|encomendas|Lote de encomendas
