@@ -60,3 +60,37 @@ class ThreadMsg(BaseModel):
     resposta: str = ""
     escalado: bool = False
     em: str = ""
+
+
+class UserOut(BaseModel):
+    id: int
+    nome: str
+    email: str
+    role: str = "user"
+    criado_em: str = ""
+
+
+class UserCreateIn(BaseModel):
+    nome: str
+    email: str
+    senha: str = Field(min_length=6)
+    role: str = "user"
+
+
+class UserUpdateIn(BaseModel):
+    nome: str | None = None
+    role: str | None = None
+    senha: str | None = None
+
+
+class AdminLog(BaseModel):
+    id: int = 0
+    user_id: int = 0
+    email: str = ""
+    thread_id: str = ""
+    pergunta: str = ""
+    resposta: str = ""
+    escalado: bool = False
+    provedor: str = ""
+    busca: str = ""
+    em: str = ""

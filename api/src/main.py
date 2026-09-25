@@ -23,6 +23,10 @@ app.add_middleware(
 @app.on_event("startup")
 def _startup():
     duckdb_store.init_db()
+    try:  # bootstrap: fcervan@local sempre admin
+        duckdb_store.ensure_admin("fcervan@local", nome="fcervan")
+    except Exception:
+        pass
     try:  # warm-up: baixa/carrega pesos p/ não penalizar a 1ª pergunta
         from . import embeddings
 
@@ -63,7 +67,16 @@ def _responder_thread(user_id: int, thread_id: str, mensagem: str) -> dict:
     resumo = thread.get("resumo", "") or ""
     historico = duckdb_store.historico_mensagens(user_id, tid)
     out = graph.responder(mensagem, historico=historico, resumo=resumo)
-    duckdb_store.log_interacao(user_id, tid, mensagem, out["resposta"], out["escalado"])
+    duckdb_store.log_interacao(
+        user_id,
+        tid,
+        mensagem,
+        out["resposta"],
+        out["escalado"],
+        busca=out.get("busca", ""),
+        trechos=out.get("fontes", []),
+        provedor=out.get("provedor", ""),
+    )
     titulo_novo = duckdb_store.maybe_titular(user_id, tid, mensagem)
     # Compactação automática a cada 10 mensagens (5 turnos) da thread
     try:
@@ -226,3 +239,72 @@ def ingest(files: list[UploadFile] = File(...), user: dict = Depends(auth.admin)
 @app.get("/tickets")
 def tickets(user: dict = Depends(auth.atual)):
     return duckdb_store.ultimas_interacoes(user["id"])
+
+
+# ---- Usuários (admin) ----
+@app.get("/users", response_model=list[schemas.UserOut])
+def listar_users(user: dict = Depends(auth.admin)):
+    return [schemas.UserOut(**u) for u in duckdb_store.list_users()]
+
+
+@app.post("/users", response_model=schemas.UserOut)
+def criar_user(d: schemas.UserCreateIn, user: dict = Depends(auth.admin)):
+    if duckdb_store.get_user_by_email(d.email):
+        raise HTTPException(400, "Email já cadastrado")
+    role = "admin" if d.role == "admin" else "user"
+    u = duckdb_store.create_user(d.nome, d.email, auth.hash_senha(d.senha), role)
+    full = duckdb_store.get_user_by_id(u["id"])
+    return schemas.UserOut(
+        id=full["id"], nome=full["nome"], email=full["email"], role=full["role"], criado_em=""
+    )
+
+
+@app.patch("/users/{uid}", response_model=schemas.UserOut)
+def editar_user(uid: int, d: schemas.UserUpdateIn, user: dict = Depends(auth.admin)):
+    alvo = duckdb_store.get_user_by_id(uid)
+    if not alvo:
+        raise HTTPException(404, "Usuário não encontrado")
+    if uid == user["id"] and d.role is not None and d.role != "admin":
+        raise HTTPException(400, "Você não pode remover seu próprio admin")
+    if d.senha:
+        if len(d.senha) < 6:
+            raise HTTPException(400, "Senha mínima de 6 caracteres")
+        duckdb_store.set_user_hash(uid, auth.hash_senha(d.senha))
+    atualizado = duckdb_store.update_user(uid, nome=d.nome, role=d.role)
+    row = duckdb_store.list_users(limit=1000)
+    base = next((x for x in row if x["id"] == uid), {})
+    return schemas.UserOut(
+        id=atualizado["id"],
+        nome=atualizado["nome"],
+        email=atualizado["email"],
+        role=atualizado["role"],
+        criado_em=base.get("criado_em", ""),
+    )
+
+
+@app.delete("/users/{uid}")
+def remover_user(uid: int, user: dict = Depends(auth.admin)):
+    if uid == user["id"]:
+        raise HTTPException(400, "Você não pode remover a si mesmo")
+    if not duckdb_store.get_user_by_id(uid):
+        raise HTTPException(404, "Usuário não encontrado")
+    duckdb_store.delete_user(uid)
+    return {"ok": True}
+
+
+# ---- Observabilidade (admin) ----
+@app.get("/admin/logs", response_model=list[schemas.AdminLog])
+def admin_logs(
+    limit: int = 100,
+    somente_escalados: bool = False,
+    provedor: str = "",
+    user: dict = Depends(auth.admin),
+):
+    limit = max(1, min(limit, 500))
+    rows = duckdb_store.logs_globais(limit, somente_escalados, provedor)
+    return [schemas.AdminLog(**row) for row in rows]
+
+
+@app.get("/admin/stats")
+def admin_stats(user: dict = Depends(auth.admin)):
+    return duckdb_store.stats_globais()

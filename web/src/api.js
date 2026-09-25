@@ -32,4 +32,17 @@ export const api = {
   threadMsgs: (id) => req(`/threads/${id}`),
   renomearThread: (id, titulo) => req(`/threads/${id}`, { method: "PATCH", body: JSON.stringify({ titulo }) }),
   apagarThread: (id) => req(`/threads/${id}`, { method: "DELETE" }),
+  users: () => req("/users"),
+  criarUser: (d) => req("/users", { method: "POST", body: JSON.stringify(d) }),
+  editarUser: (id, d) => req(`/users/${id}`, { method: "PATCH", body: JSON.stringify(d) }),
+  removerUser: (id) => req(`/users/${id}`, { method: "DELETE" }),
+  adminLogs: (params = {}) => {
+    const q = new URLSearchParams();
+    if (params.limit) q.set("limit", params.limit);
+    if (params.somente_escalados) q.set("somente_escalados", "true");
+    if (params.provedor) q.set("provedor", params.provedor);
+    const s = q.toString();
+    return req("/admin/logs" + (s ? `?${s}` : ""));
+  },
+  adminStats: () => req("/admin/stats"),
 };

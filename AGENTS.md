@@ -22,6 +22,12 @@ Chat → triagem → retrieve híbrido (denso+BM25/RRF) → grade → gerar c/ c
 
 **Groq → Ollama Cloud → OpenRouter** (mesmo padrão do avaliador-vendas). Chaves via `.env` (`GROQ_API_KEY`, `OLLAMA_CLOUD_API_KEY`, `OPENROUTER_API_KEY`) — **nunca versionar o `.env`**. Modelos default via `GROQ_MODEL`, `OLLAMA_CLOUD_MODEL`, `OPENROUTER_MODEL`.
 
+## Autonomia operacional (instrução permanente do usuário)
+
+Ao terminar um trabalho: pode buildar/testar/rodar sem pedir (`docker compose up -d --build`, `pytest`, `ruff`, `npm run build`). Nunca fazer `git add/commit/push` sem confirmação explícita — perguntar primeiro e, quando confirmado, mostrar a saída do push.
+
+Toda mudança em `api/src` ou `web/src` (telas, endpoints, funções, contagens, estrutura) exige verificar e atualizar o `README.md` antes de encerrar — ele precisa refletir tudo que a aplicação tem.
+
 ## Comandos
 
 ```bash
@@ -49,6 +55,8 @@ Portas (verificadas livres no host): `8002` api, `5175` web, `6333/6334` qdrant.
 - `POST /chat/stream` — SSE
 - `POST /ingest` (só admin, multipart) — PDF/DOCX/PPTX/XLSX/CSV/HTML/XML/TXT/MD → `{arquivos, chunks, detalhe}`
 - `GET /tickets` — últimas interações do usuário
+- `GET/POST /users`, `PATCH/DELETE /users/{id}` (só admin; bloqueia auto-remoção e auto-rebaixamento)
+- `GET /admin/logs`, `GET /admin/stats` (só admin — observabilidade global)
 
 ## Banco (DuckDB — `api/src/duckdb_store.py`)
 
@@ -57,8 +65,8 @@ Tabelas: `users(id,nome,email unique,hash,role)`, `tickets`, `interacoes(user_id
 ## Frontend (`web/src`)
 
 - `tokens.css` — tema **dark copiado do app-prospeccao/dashboard** (env `#0c0e12`, azul `#5fa3d9`, champanhe `#d8bf8e`, grain, `.stage/.panel/.card/.recessed/.btn-primary/.badge-*/.nav-item`, mobile com hamburger). Pastel descartado.
-- `App.jsx` — shell `stage > panel > sidebar 240px + main` (espelha `Layout.tsx` do prospecção).
-- `pages/`: `Login` (labels E-MAIL/SENHA + `.recessed`), `Chat` (bolhas card/blue + `badge-blue` fontes), `Ingest` (admin), `Admin` (tickets).
+- `App.jsx` — shell `stage > panel fluido (max 1760px) > sidebar 240px/64px colapsada + main` (espelha `Layout.tsx` do prospecção).
+- `pages/`: `Login` (labels E-MAIL/SENHA + `.recessed`), `Chat` (composer textarea fixo + autoscroll + tooltip título + data/hora), `Ingest` (admin, dropzone arrastar+clicar), `Admin` (tickets), `Usuarios` (admin CRUD), `Observabilidade` (admin logs+stats).
 - `api.js` — `VITE_API_URL` (default `http://localhost:8002`).
 
 ## Notebooks
