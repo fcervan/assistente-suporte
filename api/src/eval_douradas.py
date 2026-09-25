@@ -3,6 +3,7 @@
 Uso: docker compose exec api python -m src.eval_douradas [--csv tests/douradas.csv]
 Critério de aceite Fase 4: hit@4 >= 12/15.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -19,8 +20,9 @@ def norm(s: str) -> str:
 def carregar(csv_path: str) -> list[tuple[str, list[str]]]:
     with open(csv_path, encoding="utf-8") as fh:
         rows = list(csv.DictReader(fh, delimiter=";"))
-    return [(r["pergunta"], [k.strip() for k in r["keywords"].split("|") if k.strip()])
-            for r in rows]
+    return [
+        (r["pergunta"], [k.strip() for k in r["keywords"].split("|") if k.strip()]) for r in rows
+    ]
 
 
 def avaliar(csv_path: str, top_k: int = 4) -> int:

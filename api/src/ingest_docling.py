@@ -1,4 +1,5 @@
 """Ingestão SÓ com Docling: raw -> processed (.md + .json)."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -28,8 +29,9 @@ def converter_arquivo(origem: Path, destino_dir: Path) -> dict:
     return {"md_path": str(md_path), "json_path": str(json_path), "tabelas": tabelas}
 
 
-def ingerir_pasta(raw_dir: str | Path = "data/raw",
-                  out_dir: str | Path = "data/processed") -> list[dict]:
+def ingerir_pasta(
+    raw_dir: str | Path = "data/raw", out_dir: str | Path = "data/processed"
+) -> list[dict]:
     raw, out = Path(raw_dir), Path(out_dir)
     feitos = []
     for arq in sorted(raw.iterdir()):

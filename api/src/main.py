@@ -1,4 +1,5 @@
 """FastAPI multi-usuário: auth JWT + chat + threads + ingestão Docling + tickets."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -69,7 +70,8 @@ def _responder_thread(user_id: int, thread_id: str, mensagem: str) -> dict:
         total_msgs = duckdb_store.count_turnos(user_id, tid) * 2
         if total_msgs and total_msgs % 10 == 0:
             ultimas = duckdb_store.historico_mensagens(
-                user_id, tid, turns=duckdb_store.JANELA_TURNS)
+                user_id, tid, turns=duckdb_store.JANELA_TURNS
+            )
             novo = graph.gerar_resumo(resumo, ultimas)
             if novo != resumo:
                 duckdb_store.update_resumo(user_id, tid, novo)
@@ -81,9 +83,14 @@ def _responder_thread(user_id: int, thread_id: str, mensagem: str) -> dict:
 def _chat_out(out: dict) -> schemas.ChatOut:
     return schemas.ChatOut(
         resposta=out["resposta"],
-        fontes=[schemas.Fonte(fonte=f.get("fonte", ""), pagina=f.get("pagina"),
-                              score=float(f.get("score", 0))) for f in out["fontes"]],
-        escalado=out["escalado"], provedor=out.get("provedor", ""),
+        fontes=[
+            schemas.Fonte(
+                fonte=f.get("fonte", ""), pagina=f.get("pagina"), score=float(f.get("score", 0))
+            )
+            for f in out["fontes"]
+        ],
+        escalado=out["escalado"],
+        provedor=out.get("provedor", ""),
         thread_id=out.get("thread_id", "default"),
     )
 
@@ -112,14 +119,18 @@ def threads(user: dict = Depends(auth.atual)):
 
 
 @app.post("/threads", response_model=schemas.ThreadOut)
-def criar_thread(d: schemas.ThreadCreateIn | None = None,
-                 user: dict = Depends(auth.atual)):
+def criar_thread(d: schemas.ThreadCreateIn | None = None, user: dict = Depends(auth.atual)):
     t = duckdb_store.ensure_thread(user["id"], None)
     if d and d.titulo and d.titulo != "Nova conversa":
         duckdb_store.rename_thread(user["id"], t["id"], d.titulo)
         t = duckdb_store.get_thread(user["id"], t["id"])
-    item = {"id": t["id"], "titulo": t["titulo"], "tem_resumo": bool(t["resumo"]),
-            "atualizado_em": "", "mensagens": 0}
+    item = {
+        "id": t["id"],
+        "titulo": t["titulo"],
+        "tem_resumo": bool(t["resumo"]),
+        "atualizado_em": "",
+        "mensagens": 0,
+    }
     return schemas.ThreadOut(**item)
 
 
@@ -127,23 +138,24 @@ def criar_thread(d: schemas.ThreadCreateIn | None = None,
 def thread_msgs(thread_id: str, user: dict = Depends(auth.atual)):
     if not duckdb_store.get_thread(user["id"], thread_id):
         raise HTTPException(404, "Conversa não encontrada")
-    return [schemas.ThreadMsg(**m)
-            for m in duckdb_store.mensagens_thread(user["id"], thread_id)]
+    return [schemas.ThreadMsg(**m) for m in duckdb_store.mensagens_thread(user["id"], thread_id)]
 
 
 @app.patch("/threads/{thread_id}", response_model=schemas.ThreadOut)
-def renomear_thread(thread_id: str, d: schemas.ThreadRenameIn,
-                     user: dict = Depends(auth.atual)):
+def renomear_thread(thread_id: str, d: schemas.ThreadRenameIn, user: dict = Depends(auth.atual)):
     if not duckdb_store.get_thread(user["id"], thread_id):
         raise HTTPException(404, "Conversa não encontrada")
     duckdb_store.rename_thread(user["id"], thread_id, d.titulo)
     t = duckdb_store.get_thread(user["id"], thread_id)
     itens = {x["id"]: x for x in duckdb_store.list_threads(user["id"], limit=500)}
     base = itens.get(thread_id, {})
-    return schemas.ThreadOut(id=t["id"], titulo=t["titulo"],
-                             tem_resumo=bool(t["resumo"]),
-                             atualizado_em=base.get("atualizado_em", ""),
-                             mensagens=base.get("mensagens", 0))
+    return schemas.ThreadOut(
+        id=t["id"],
+        titulo=t["titulo"],
+        tem_resumo=bool(t["resumo"]),
+        atualizado_em=base.get("atualizado_em", ""),
+        mensagens=base.get("mensagens", 0),
+    )
 
 
 @app.delete("/threads/{thread_id}")
@@ -172,11 +184,18 @@ def ingest(files: list[UploadFile] = File(...), user: dict = Depends(auth.admin)
         doc_id = ""
         if destino.suffix.lower() in {".csv", ".xlsx"}:
             texto = Path(info["md_path"]).read_text(encoding="utf-8")
-            partes = [{"texto": p, "fonte": f.filename, "pagina": None, "secao": "",
-                       "chunk_index": i, "doc_id": f.filename}
-                      for i, p in enumerate(chunk_mod.chunk_csv_linhas(texto))]
+            partes = [
+                {
+                    "texto": p,
+                    "fonte": f.filename,
+                    "pagina": None,
+                    "secao": "",
+                    "chunk_index": i,
+                    "doc_id": f.filename,
+                }
+                for i, p in enumerate(chunk_mod.chunk_csv_linhas(texto))
+            ]
         else:
-
             from .reingest_v2 import doc_meta
 
             fonte, doc_id, doc = doc_meta(Path(info["json_path"]))
@@ -185,11 +204,19 @@ def ingest(files: list[UploadFile] = File(...), user: dict = Depends(auth.admin)
                 partes = chunk_mod.chunk_docling(doc, fonte=fonte, doc_id=doc_id)
             else:
                 texto = Path(info["md_path"]).read_text(encoding="utf-8")
-                partes = [{"texto": p, "fonte": fonte, "pagina": None, "secao": "",
-                           "chunk_index": i, "doc_id": doc_id}
-                          for i, p in enumerate(
-                              chunk_mod.chunk_texto(texto, config.CHUNK_SIZE,
-                                                    config.CHUNK_OVERLAP))]
+                partes = [
+                    {
+                        "texto": p,
+                        "fonte": fonte,
+                        "pagina": None,
+                        "secao": "",
+                        "chunk_index": i,
+                        "doc_id": doc_id,
+                    }
+                    for i, p in enumerate(
+                        chunk_mod.chunk_texto(texto, config.CHUNK_SIZE, config.CHUNK_OVERLAP)
+                    )
+                ]
         n = vq.upsert(partes)
         total_chunks += n
         relatorio.append({"arquivo": f.filename, "chunks": n, **info})

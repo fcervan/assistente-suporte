@@ -3,6 +3,7 @@
 Uso (dentro do container api):
     python -m src.reingest_v2 [--no-wipe] [--proc data/processed]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -21,8 +22,7 @@ def doc_meta(json_path: Path) -> tuple[str, str, dict | str]:
     origin = doc.get("origin") or {}
     fonte = origin.get("filename") or f"{json_path.stem}.pdf"
     bhash = origin.get("binary_hash")
-    doc_id = str(bhash) if bhash else hashlib.sha1(
-        json_path.stem.encode()).hexdigest()[:16]
+    doc_id = str(bhash) if bhash else hashlib.sha1(json_path.stem.encode()).hexdigest()[:16]
     return fonte, doc_id, doc
 
 
@@ -33,8 +33,7 @@ def reimportar(proc_dir: str = "data/processed", wipe: bool = True) -> dict:
     proc = Path(proc_dir)
     arquivos = sorted(proc.glob("*.json"))
     if wipe:
-        print(f"[reingest] WIPE da coleção + reimportação de {len(arquivos)} json(s)",
-              flush=True)
+        print(f"[reingest] WIPE da coleção + reimportação de {len(arquivos)} json(s)", flush=True)
         vq.wipe_colecao()
     total, detalhe = 0, []
     for jp in arquivos:
@@ -44,10 +43,17 @@ def reimportar(proc_dir: str = "data/processed", wipe: bool = True) -> dict:
         else:  # fallback: .md legado fatiado simples
             md = jp.with_suffix(".md")
             texto = md.read_text(encoding="utf-8") if md.exists() else ""
-            partes = [{"texto": p, "fonte": fonte, "pagina": None, "secao": "",
-                       "chunk_index": i, "doc_id": doc_id}
-                      for i, p in enumerate(
-                          chunk_mod.chunk_texto(texto, 800, 120))]
+            partes = [
+                {
+                    "texto": p,
+                    "fonte": fonte,
+                    "pagina": None,
+                    "secao": "",
+                    "chunk_index": i,
+                    "doc_id": doc_id,
+                }
+                for i, p in enumerate(chunk_mod.chunk_texto(texto, 800, 120))
+            ]
         n = vq.upsert(partes)
         total += n
         detalhe.append({"arquivo": jp.name, "fonte": fonte, "chunks": n})

@@ -3,6 +3,7 @@
 Fase 2: memória conversacional (últimas 10 msgs + resumo compactado da thread).
 Evolução do agente_de_suporte_langgraph.ipynb com RAG híbrido + citação.
 """
+
 from __future__ import annotations
 
 from typing import TypedDict
@@ -71,11 +72,15 @@ def reescrever(state: State) -> State:
 
         llm = llm_client.get_llm(verbose=False)
         htxt = formatar_historico(hist[-6:], limite=400)
-        msg = llm.invoke([
-            SystemMessage(content=REWRITE_SYSTEM),
-            HumanMessage(content=f"RESUMO: {resumo[:800]}\nHISTÓRICO:\n{htxt}\n"
-                                 f"PERGUNTA: {state['pergunta']}"),
-        ])
+        msg = llm.invoke(
+            [
+                SystemMessage(content=REWRITE_SYSTEM),
+                HumanMessage(
+                    content=f"RESUMO: {resumo[:800]}\nHISTÓRICO:\n{htxt}\n"
+                    f"PERGUNTA: {state['pergunta']}"
+                ),
+            ]
+        )
         busca = (msg.content or "").strip().split("\n")[0][:500] or state["pergunta"]
         return {**state, "busca": busca}
     except Exception:
@@ -119,8 +124,12 @@ def gerar(state: State) -> State:
         trechos = state.get("trechos", [])[:2]
         txt = "\n\n".join(f"[{t.get('fonte','doc')}] {t.get('texto','')[:600]}" for t in trechos)
         fontes = "; ".join(t.get("fonte", "doc") for t in trechos) or "base local"
-        return {**state, "resposta": f"Baseado na base ({fontes}):\n\n{txt}",
-                "escalado": False, "provedor": "extrativo"}
+        return {
+            **state,
+            "resposta": f"Baseado na base ({fontes}):\n\n{txt}",
+            "escalado": False,
+            "provedor": "extrativo",
+        }
     ctx = "\n\n".join(
         f"[{t.get('fonte','doc')}] {t.get('texto','')[:900]}" for t in state.get("trechos", [])[:4]
     )
@@ -148,21 +157,28 @@ def gerar_resumo(resumo_antigo: str, ultimas: list[dict]) -> str:
         from . import llm_client
 
         llm = llm_client.get_llm(verbose=False)
-        msg = llm.invoke([
-            SystemMessage(content=RESUMO_SYSTEM),
-            HumanMessage(content=f"RESUMO ANTERIOR:\n{(resumo_antigo or '')[:1500]}\n\n"
-                                 f"NOVAS MENSAGENS:\n{htxt}"),
-        ])
+        msg = llm.invoke(
+            [
+                SystemMessage(content=RESUMO_SYSTEM),
+                HumanMessage(
+                    content=f"RESUMO ANTERIOR:\n{(resumo_antigo or '')[:1500]}\n\n"
+                    f"NOVAS MENSAGENS:\n{htxt}"
+                ),
+            ]
+        )
         return (msg.content or "").strip()[:4000] or (resumo_antigo or "")
     except Exception:
         return resumo_antigo or ""
 
 
 def escalar(state: State) -> State:
-    return {**state,
-            "resposta": "Não encontrei base suficiente. Abri escalação para o time humano "
-                        "— descreva prints/erro/horário para agilizar.",
-            "escalado": True, "provedor": "regra"}
+    return {
+        **state,
+        "resposta": "Não encontrei base suficiente. Abri escalação para o time humano "
+        "— descreva prints/erro/horário para agilizar.",
+        "escalado": True,
+        "provedor": "regra",
+    }
 
 
 def build_graph():
@@ -188,8 +204,13 @@ def responder(pergunta: str, historico: list | None = None, resumo: str = "") ->
     global _graph
     if _graph is None:
         _graph = build_graph()
-    out = _graph.invoke({"pergunta": pergunta, "historico": historico or [],
-                         "resumo": resumo or ""})
-    return {"resposta": out.get("resposta", ""), "fontes": out.get("trechos", [])[:4],
-            "escalado": bool(out.get("escalado")), "provedor": out.get("provedor", ""),
-            "busca": out.get("busca", pergunta)}
+    out = _graph.invoke(
+        {"pergunta": pergunta, "historico": historico or [], "resumo": resumo or ""}
+    )
+    return {
+        "resposta": out.get("resposta", ""),
+        "fontes": out.get("trechos", [])[:4],
+        "escalado": bool(out.get("escalado")),
+        "provedor": out.get("provedor", ""),
+        "busca": out.get("busca", pergunta),
+    }

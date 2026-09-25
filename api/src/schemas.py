@@ -1,4 +1,5 @@
 """Schemas Pydantic da API."""
+
 from pydantic import BaseModel, Field
 
 

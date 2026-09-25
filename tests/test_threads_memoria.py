@@ -1,6 +1,17 @@
 """Fase 1+2: threads persistentes + memória conversacional (DuckDB temporário)."""
+
+import sys
+
 import src.duckdb_store as store
 from src import config, graph
+
+
+def _stub_src(monkeypatch, name, mod):
+    """Stub que vale p/ `from . import x` (sys.modules + atributo do pacote)."""
+    import src as _pkg
+
+    monkeypatch.setitem(sys.modules, f"src.{name}", mod)
+    monkeypatch.setattr(_pkg, name, mod, raising=False)
 
 
 def _isolado(tmp_path, monkeypatch):
@@ -62,11 +73,13 @@ def test_rewrite_usa_historico_para_busca(monkeypatch):
     import src.llm_client as llm
 
     monkeypatch.setattr(llm, "get_llm", lambda verbose=False: FakeLLM())
-    out = graph.reescrever({
-        "pergunta": "e o passo 2?",
-        "historico": [{"role": "user", "content": "como configuro a VPN no Ubuntu?"}],
-        "resumo": "",
-    })
+    out = graph.reescrever(
+        {
+            "pergunta": "e o passo 2?",
+            "historico": [{"role": "user", "content": "como configuro a VPN no Ubuntu?"}],
+            "resumo": "",
+        }
+    )
     assert out["busca"] == "qual o passo 2 da VPN no Ubuntu?"
 
 
@@ -92,12 +105,12 @@ def test_gerar_resumo_fallback_sem_llm(monkeypatch):
 
 
 def test_responder_aceita_historico_e_resumo(monkeypatch):
-    import sys
     import types
 
     stub = types.ModuleType("src.vector_qdrant")
     stub.buscar = lambda *a, **k: []
-    monkeypatch.setitem(sys.modules, "src.vector_qdrant", stub)
-    out = graph.responder("e ele?", historico=[{"role": "user", "content": "vpn?"}],
-                          resumo="usuário usa Ubuntu")
+    _stub_src(monkeypatch, "vector_qdrant", stub)
+    out = graph.responder(
+        "e ele?", historico=[{"role": "user", "content": "vpn?"}], resumo="usuário usa Ubuntu"
+    )
     assert out["escalado"] is True and out["resposta"]

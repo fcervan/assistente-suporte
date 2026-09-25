@@ -1,4 +1,5 @@
 """Valida o CSV dourado localmente (o retrieval live roda no container)."""
+
 import csv
 from pathlib import Path
 

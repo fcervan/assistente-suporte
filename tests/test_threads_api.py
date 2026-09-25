@@ -1,4 +1,5 @@
 """Fase 1+2 (bugs): threads via endpoints + Nova conversa de verdade."""
+
 import sys
 import types
 
@@ -8,10 +9,19 @@ from src import auth, config, main, schemas
 from src import duckdb_store as store
 
 
+def _stub_src(monkeypatch, name, mod):
+    """Stub que vale p/ `from . import x` (sys.modules + atributo do pacote)."""
+    import src as _pkg
+
+    monkeypatch.setitem(sys.modules, f"src.{name}", mod)
+    monkeypatch.setattr(_pkg, name, mod, raising=False)
+
+
 @pytest.fixture()
 def user(tmp_path, monkeypatch):
-    monkeypatch.setitem(sys.modules, "src.vector_qdrant",
-                        types.SimpleNamespace(buscar=lambda *a, **k: []))
+    monkeypatch.setitem(
+        sys.modules, "src.vector_qdrant", types.SimpleNamespace(buscar=lambda *a, **k: [])
+    )
     monkeypatch.setattr(config, "DUCKDB_PATH", str(tmp_path / "api.duckdb"))
     store.init_db()
     return store.create_user("T", "t@t.t", auth.hash_senha("123456"), "user")

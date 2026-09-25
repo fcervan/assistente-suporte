@@ -1,4 +1,5 @@
 """Auth JWT local (v1)."""
+
 from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, HTTPException
