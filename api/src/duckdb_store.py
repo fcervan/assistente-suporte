@@ -1,4 +1,5 @@
 """DuckDB embarcado: users, tickets, threads, interacoes. Writer único serializado."""
+
 from __future__ import annotations
 
 import threading
@@ -53,9 +54,7 @@ def init_db() -> None:
         )
         # Backfill: threads implícitas de interações antigas (pre-Fase 1)
         try:
-            rows = con.execute(
-                "SELECT DISTINCT user_id, thread_id FROM interacoes"
-            ).fetchall()
+            rows = con.execute("SELECT DISTINCT user_id, thread_id FROM interacoes").fetchall()
             for uid, tid in rows:
                 tid = tid or "default"
                 existe = con.execute(
@@ -132,8 +131,13 @@ def list_threads(user_id: int, limit: int = 50) -> list[dict]:
         except Exception:
             return []
         return [
-            {"id": r[0], "titulo": r[1], "tem_resumo": bool(r[2]),
-             "atualizado_em": str(r[3]), "mensagens": int(r[4]) * 2}
+            {
+                "id": r[0],
+                "titulo": r[1],
+                "tem_resumo": bool(r[2]),
+                "atualizado_em": str(r[3]),
+                "mensagens": int(r[4]) * 2,
+            }
             for r in rows
         ]
 
@@ -172,9 +176,7 @@ def delete_thread(user_id: int, thread_id: str) -> None:
             "DELETE FROM interacoes WHERE user_id=? AND thread_id=?",
             [user_id, thread_id],
         )
-        con.execute(
-            "DELETE FROM threads WHERE id=? AND user_id=?", [thread_id, user_id]
-        )
+        con.execute("DELETE FROM threads WHERE id=? AND user_id=?", [thread_id, user_id])
 
 
 def get_resumo(user_id: int, thread_id: str) -> str:
@@ -217,8 +219,7 @@ def count_turnos(user_id: int, thread_id: str) -> int:
         return int(row[0]) if row else 0
 
 
-def historico_mensagens(user_id: int, thread_id: str,
-                        turns: int = JANELA_TURNS) -> list[dict]:
+def historico_mensagens(user_id: int, thread_id: str, turns: int = JANELA_TURNS) -> list[dict]:
     """Últimos N turnos como [{role, content}] ordenado ASC (role=user|assistant)."""
     with _lock, connect() as con:
         rows = con.execute(
@@ -248,8 +249,9 @@ def mensagens_thread(user_id: int, thread_id: str, limit: int = 100) -> list[dic
         ]
 
 
-def log_interacao(user_id: int, thread_id: str, pergunta: str,
-                  resposta: str, escalado: bool) -> None:
+def log_interacao(
+    user_id: int, thread_id: str, pergunta: str, resposta: str, escalado: bool
+) -> None:
     with _lock, connect() as con:
         tid = con.execute("SELECT nextval('seq_interacoes')").fetchone()[0]
         con.execute(
@@ -259,8 +261,7 @@ def log_interacao(user_id: int, thread_id: str, pergunta: str,
         )
         try:
             con.execute(
-                "UPDATE threads SET atualizado_em=current_timestamp"
-                " WHERE id=? AND user_id=?",
+                "UPDATE threads SET atualizado_em=current_timestamp" " WHERE id=? AND user_id=?",
                 [thread_id, user_id],
             )
         except Exception:

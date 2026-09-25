@@ -3,6 +3,7 @@
 v2 (chunk_docling): agrupa blocos do JSON do Docling por seção, preserva
 tabelas/código inteiros, descarta header/footer e anexa pagina/secao/doc_id.
 """
+
 from __future__ import annotations
 
 import re
@@ -90,8 +91,9 @@ def _tabela_blocos(table: dict, max_tokens: int = 300) -> list[str]:
     return blocos
 
 
-def _empacotar(blocos: list[tuple[str, int | None]], secao: str, fonte: str,
-               doc_id: str, idx0: int) -> tuple[list[dict], int]:
+def _empacotar(
+    blocos: list[tuple[str, int | None]], secao: str, fonte: str, doc_id: str, idx0: int
+) -> tuple[list[dict], int]:
     """Blocos (texto, pagina) -> chunks com overlap por sentença completa."""
     sents: list[tuple[str, int | None]] = []
     for texto, pag in blocos:
@@ -105,8 +107,16 @@ def _empacotar(blocos: list[tuple[str, int | None]], secao: str, fonte: str,
             corpo = " ".join(atual).strip()
             pagina = next((p for p in pags if p is not None), None)
             texto = f"[Seção: {secao}]\n{corpo}" if secao else corpo
-            chunks.append({"texto": texto, "fonte": fonte, "pagina": pagina,
-                           "secao": secao, "chunk_index": idx, "doc_id": doc_id})
+            chunks.append(
+                {
+                    "texto": texto,
+                    "fonte": fonte,
+                    "pagina": pagina,
+                    "secao": secao,
+                    "chunk_index": idx,
+                    "doc_id": doc_id,
+                }
+            )
             idx += 1
             # overlap: últimas sentenças completas (~OVERLAP_TOKENS)
             keep, total = [], 0
@@ -115,14 +125,22 @@ def _empacotar(blocos: list[tuple[str, int | None]], secao: str, fonte: str,
                 keep.append(sv)
                 if total >= OVERLAP_TOKENS:
                     break
-            kpags = pags[-len(keep):] if keep else []
+            kpags = pags[-len(keep) :] if keep else []
             atual, pags = list(reversed(keep)), list(kpags)
     if any(a.strip() for a in atual):
         corpo = " ".join(atual).strip()
         pagina = next((p for p in pags if p is not None), None)
         texto = f"[Seção: {secao}]\n{corpo}" if secao else corpo
-        chunks.append({"texto": texto, "fonte": fonte, "pagina": pagina,
-                       "secao": secao, "chunk_index": idx, "doc_id": doc_id})
+        chunks.append(
+            {
+                "texto": texto,
+                "fonte": fonte,
+                "pagina": pagina,
+                "secao": secao,
+                "chunk_index": idx,
+                "doc_id": doc_id,
+            }
+        )
         idx += 1
     return chunks, idx
 
@@ -140,8 +158,7 @@ def chunk_docling(doc: dict, fonte: str = "", doc_id: str = "") -> list[dict]:
 
     # Posição de cada tabela no fluxo de leitura: via body.children quando
     # presente (insere após o texto anterior); senão, fallback por página.
-    pos_texto = {t.get("self_ref"): i for i, t in enumerate(textos)
-                 if t.get("self_ref")}
+    pos_texto = {t.get("self_ref"): i for i, t in enumerate(textos) if t.get("self_ref")}
     ancoras: dict[str, int] = {}
     filhos = ((doc.get("body") or {}).get("children")) or []
     ultimo_txt = -1
@@ -178,16 +195,22 @@ def chunk_docling(doc: dict, fonte: str = "", doc_id: str = "") -> list[dict]:
         nonlocal idx
         blocos = _tabela_blocos(table)
         for b, md in enumerate(blocos):
-            if not md.strip():
-                continue
             pag = _pagina_de(table)
             suf = f" (parte {b + 1}/{len(blocos)})" if len(blocos) > 1 else ""
             if secao:
                 texto = f"[Seção: {secao} | Tabela{suf}]\n{md}"
             else:  # tabela antes do 1º cabeçalho: seção preenchida no pós-passe
                 texto = f"[Tabela{suf}]\n{md}"
-            chunks.append({"texto": texto, "fonte": fonte, "pagina": pag,
-                           "secao": secao, "chunk_index": idx, "doc_id": doc_id})
+            chunks.append(
+                {
+                    "texto": texto,
+                    "fonte": fonte,
+                    "pagina": pag,
+                    "secao": secao,
+                    "chunk_index": idx,
+                    "doc_id": doc_id,
+                }
+            )
             idx += 1
 
     def descarregar_tabelas(pos: int):
@@ -220,9 +243,11 @@ def chunk_docling(doc: dict, fonte: str = "", doc_id: str = "") -> list[dict]:
     bons = []
     for c in chunks:
         corpo = re.sub(r"^\[Seção:[^\]]*\]\s*", "", c["texto"]).strip()
-        if (_estimar_tokens(corpo) >= MIN_TOKENS
-                or "[Tabela]" in c["texto"]
-                or any(s in corpo for s in _SINAIS_CODIGO)):
+        if (
+            _estimar_tokens(corpo) >= MIN_TOKENS
+            or "[Tabela]" in c["texto"]
+            or any(s in corpo for s in _SINAIS_CODIGO)
+        ):
             bons.append(c)
     for i, c in enumerate(bons):
         c["chunk_index"] = i
@@ -233,8 +258,7 @@ def chunk_docling(doc: dict, fonte: str = "", doc_id: str = "") -> list[dict]:
             prox = c["secao"]
         elif prox:
             c["secao"] = prox
-            c["texto"] = re.sub(r"^\[Tabela[^\]]*\]\n",
-                                f"[Seção: {prox} | Tabela]\n", c["texto"])
+            c["texto"] = re.sub(r"^\[Tabela[^\]]*\]\n", f"[Seção: {prox} | Tabela]\n", c["texto"])
     return [c for c in bons if c["texto"].strip()]
 
 
@@ -244,7 +268,7 @@ def chunk_texto(texto: str, tamanho: int = 800, overlap: int = 120) -> list[str]
         return []
     partes, i, n = [], 0, len(texto)
     while i < n:
-        partes.append(texto[i: i + tamanho])
+        partes.append(texto[i : i + tamanho])
         i += max(1, tamanho - overlap)
     return [p for p in partes if p.strip()]
 

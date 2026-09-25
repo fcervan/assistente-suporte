@@ -1,4 +1,5 @@
 """Embeddings multilíngues PT + BM25 híbrido (RRF)."""
+
 from __future__ import annotations
 
 import re
@@ -59,8 +60,9 @@ def _chave(r: dict) -> tuple:
     return (r.get("texto", ""), r.get("secao", ""), r.get("pagina"), r.get("fonte", ""))
 
 
-def fusao_rrf(r_dense: list[dict], r_bm25: list[dict], k: int = 60,
-              w_dense: float = 0.5, w_bm25: float = 0.5) -> list[dict]:
+def fusao_rrf(
+    r_dense: list[dict], r_bm25: list[dict], k: int = 60, w_dense: float = 0.5, w_bm25: float = 0.5
+) -> list[dict]:
     """Reciprocal Rank Fusion com pesos iguais (padrão RRF).
 
     Fusão por CONTEÚDO (texto/secao/pagina/fonte), não por id(): o BM25

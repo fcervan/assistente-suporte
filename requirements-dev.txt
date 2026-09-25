@@ -1,3 +1,6 @@
 pytest
+pytest-cov
 ruff
 httpx
+numpy
+rank-bm25
