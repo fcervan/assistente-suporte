@@ -139,7 +139,7 @@ def gerar(state: State) -> State:
     except Exception:
         # Sem chave/LLM: resposta extrativa simples (não quebra o chat)
         trechos = state.get("trechos", [])[:2]
-        txt = "\n\n".join(f"[{t.get('fonte','doc')}] {t.get('texto','')[:600]}" for t in trechos)
+        txt = "\n\n".join(f"[{t.get('fonte', 'doc')}] {t.get('texto', '')[:600]}" for t in trechos)
         fontes = "; ".join(t.get("fonte", "doc") for t in trechos) or "base local"
         return {
             **state,
@@ -148,7 +148,8 @@ def gerar(state: State) -> State:
             "provedor": "extrativo",
         }
     ctx = "\n\n".join(
-        f"[{t.get('fonte','doc')}] {t.get('texto','')[:900]}" for t in state.get("trechos", [])[:4]
+        f"[{t.get('fonte', 'doc')}] {t.get('texto', '')[:900]}"
+        for t in state.get("trechos", [])[:4]
     )
     resumo = (state.get("resumo") or "").strip()
     htxt = formatar_historico((state.get("historico") or [])[-10:])

@@ -32,11 +32,11 @@ def avaliar(csv_path: str, top_k: int = 4) -> int:
     hits = 0
     for i, (pergunta, kws) in enumerate(casos, 1):
         trechos = vector_qdrant.buscar(pergunta, top_k=top_k)
-        blob = norm(" ".join(f"{t.get('secao','')} {t.get('texto','')}" for t in trechos))
+        blob = norm(" ".join(f"{t.get('secao', '')} {t.get('texto', '')}" for t in trechos))
         ok_kw = [k for k in kws if norm(k) in blob]
         ok = bool(ok_kw)
         hits += ok
-        secoes = " | ".join(f"{t.get('secao','?')[:45]} p.{t.get('pagina')}" for t in trechos)
+        secoes = " | ".join(f"{t.get('secao', '?')[:45]} p.{t.get('pagina')}" for t in trechos)
         print(f"[{'HIT ' if ok else 'MISS'}] Q{i:02d} {pergunta[:70]}")
         print(f"       kw={ok_kw or '-'} :: {secoes}", flush=True)
     print(f"[eval] hit@{top_k}: {hits}/{len(casos)}")

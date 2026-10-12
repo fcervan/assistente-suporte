@@ -65,6 +65,5 @@ def get_llm(verbose: bool = True):
             pass
 
     raise RuntimeError(
-        "Nenhuma chave encontrada. Defina GROQ_API_KEY, "
-        "OLLAMA_CLOUD_API_KEY ou OPENROUTER_API_KEY"
+        "Nenhuma chave encontrada. Defina GROQ_API_KEY, OLLAMA_CLOUD_API_KEY ou OPENROUTER_API_KEY"
     )

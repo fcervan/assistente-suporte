@@ -229,8 +229,7 @@ def rename_thread(user_id: int, thread_id: str, titulo: str) -> bool:
     titulo = " ".join((titulo or "").split())[:80] or TITULO_PADRAO
     with _lock, connect() as con:
         con.execute(
-            "UPDATE threads SET titulo=?, atualizado_em=current_timestamp"
-            " WHERE id=? AND user_id=?",
+            "UPDATE threads SET titulo=?, atualizado_em=current_timestamp WHERE id=? AND user_id=?",
             [titulo, thread_id, user_id],
         )
         row = con.execute(
@@ -256,8 +255,7 @@ def get_resumo(user_id: int, thread_id: str) -> str:
 def update_resumo(user_id: int, thread_id: str, resumo: str) -> None:
     with _lock, connect() as con:
         con.execute(
-            "UPDATE threads SET resumo=?, atualizado_em=current_timestamp"
-            " WHERE id=? AND user_id=?",
+            "UPDATE threads SET resumo=?, atualizado_em=current_timestamp WHERE id=? AND user_id=?",
             [(resumo or "")[:4000], thread_id, user_id],
         )
 
@@ -366,7 +364,7 @@ def log_interacao(
         )
         try:
             con.execute(
-                "UPDATE threads SET atualizado_em=current_timestamp" " WHERE id=? AND user_id=?",
+                "UPDATE threads SET atualizado_em=current_timestamp WHERE id=? AND user_id=?",
                 [thread_id, user_id],
             )
         except Exception:
