@@ -87,4 +87,4 @@ Tabelas: `users(id,nome,email unique,hash,role)`, `tickets`, `interacoes(user_id
 
 - Web: http://localhost:5175 · API docs: http://localhost:8002/docs · Qdrant: http://localhost:6333/dashboard
 - Usuário admin local: `fcervan@local` / `123456` (criado via `/auth/register` com `role=admin`).
-- Base inicial: `manual-Acme.pdf` (Manual API Acme v2.1, 145 chunks, 9 tabelas).
+- Base inicial de demonstração: `manual-acme-ficticio.pdf` (Manual da API Acme Fictícia, 100% inventado, gerado por script).

@@ -76,6 +76,6 @@ def buscar(query: str, top_k: int = 8) -> list[dict]:
     if not densos:
         return []
     # Lado denso usa a query original (MiniLM já cruza sinônimos); lado BM25
-    # usa a query expandida p/ casar pedido/request ↔ encomenda/volume/transmissão.
+    # usa a query expandida p/ casar pedido/request ↔ pacote/remessa/solicitação.
     lex = embeddings.busca_bm25(embeddings.expandir_query(query), densos, top_k=top_k)
     return embeddings.fusao_rrf(densos, lex)[:top_k]

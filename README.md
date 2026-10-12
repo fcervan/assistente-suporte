@@ -16,8 +16,7 @@ RAG multiusuário de suporte técnico de TI (PT-BR): o usuário envia documentos
 respostas **grounded na base** — com citação de fonte e página — ou escalação honesta
 ao time humano quando não há base suficiente.
 
-Diferenciais técnicos: chunking por **estrutura do documento** (seção/página/tabela,
-145 → 55 chunks), RAG **híbrido denso + BM25 com stemming PT** (fusão RRF por conteúdo),
+Diferenciais técnicos: chunking por **estrutura do documento** (seção/página/tabela), RAG **híbrido denso + BM25 com stemming PT** (fusão RRF por conteúdo),
 memória conversacional (últimas 10 mensagens + **resumo compactado a cada 10**),
 threads estilo ChatGPT (criar/continuar/renomear/apagar, tooltip com título cheio e
 data/hora `dd/mm/aaaa às hh:mm`), chat padrão mercado (textarea fixa, autoscroll),
@@ -26,23 +25,24 @@ gestão de **usuários com perfis user/admin** e tela de **observabilidade**
 
 ## Demonstração
 
-Eval dourado sobre o Manual da API Acme (`tests/douradas.csv`): 16 perguntas
-reais (autenticação, método CriarPacote, responses 200/206/400/401, impressão de
-etiquetas, envio em lote…) — **hit@4 em 16/16** após o chunking v2 (antes: 10/15,
-com direito a alucinação: um “sim, pode enviar pedido a pedido” confiante e errado,
-hoje respondido corretamente como proibido, com citação).
+Eval dourado sobre o Manual da API Acme Fictícia (`tests/douradas.csv`):
+16 perguntas sobre uma base de exemplo 100% inventada (autenticação TKF,
+método CriarPacote, responses 200/206/400/401, impressão de etiquetas,
+envio em lote…) — **hit@4 em 16/16** após o chunking v2. A base fictícia
+(`data/raw/manual-acme-ficticio.pdf`, gerada por script, sem vínculo com
+nenhuma empresa real) existe só para demonstração do pipeline.
 
 | # | Pergunta | Resultado |
 |---|---|---|
-| 1 | Como funciona a autenticação? | ✅ seção Autenticação, p. 13 |
-| 2 | O que é o método CriarPacote? | ✅ seções 3, 4 e 4.2 |
-| 3 | O que é o campo codigoCliente? | ✅ tabela 4.2 (parte 3/4), p. 8 |
-| 4–7 | Responses 200 / 206 / 400 / 401 | ✅ exemplos, pp. 18–20 |
-| 8 | Como imprimir as etiquetas? | ✅ Modelo de etiqueta, p. 21 |
+| 1 | Como funciona a autenticação? | ✅ seção Autenticação (chave TKF) |
+| 2 | O que é o método CriarPacote? | ✅ seções 3, 4 e Anexo B |
+| 3 | O que é o campo codigoCliente? | ✅ tabela da seção 4 |
+| 4–7 | Responses 200 / 206 / 400 / 401 | ✅ exemplos, seção 5 |
+| 8 | Como imprimir as etiquetas? | ✅ Modelo de etiqueta, seção 6 |
 | 9 | Disponibilidade da API? | ✅ 24h/7d, seção 1.2 |
 | 10 | Posso enviar pedidos um a um? | ✅ “proibido”, seção 1.3 |
 | 11–15 | Testes, falhas, acesso, exemplo, conceito | ✅ |
-| 16 | Posso enviar mais de um pedido por request? | ✅ “um ou mais volumes (encomendas)”, seção 4 |
+| 16 | Posso enviar mais de um pedido por solicitação? | ✅ “um ou mais pacotes (remessas)”, seção 3 |
 
 > 📸 Prints do chat e da sidebar de conversas entram aqui em breve (`docs/demo-chat.png`, `docs/demo-threads.png`).
 
@@ -102,7 +102,8 @@ HTML/XML/TXT/MD. Reimportação total via `docker compose exec api python -m src
 
 **Primeiro acesso:** o usuário `fcervan@local` é promovido a `admin` automaticamente
 no startup. Entre com ele, gerencie usuários na aba *Usuários* e envie o
-`data/raw/manual-Acme.pdf` como base inicial.
+`data/raw/manual-acme-ficticio.pdf` como base inicial de demonstração
+(manual 100% inventado, gerado por script — sem vínculo com empresa real).
 
 **API (resumo):** `POST /auth/register|/auth/login`, `GET /me`, `POST /chat|/chat/stream`,
 `GET|POST /threads`, `PATCH|DELETE /threads/{id}`, `GET /tickets`,
@@ -128,17 +129,17 @@ assistente-suporte/
 │   ├── llm_client.py      # fallback Groq → Ollama Cloud → OpenRouter
 │   └── auth.py            # JWT + hash bcrypt (+guarda admin)
 ├── web/src/               # React 18 + Vite (Chat c/ textarea+autoscroll, Ingest c/ dropzone, Admin, Usuarios, Observabilidade, Login; sidebar colapsável)
-├── tests/                 # 79 testes + CSV dourado (16 perguntas)
+├── tests/                 # 80 testes + CSV dourado (16 perguntas)
 └── docker-compose.yml     # api :8002 + web :5175 + qdrant :6333
 ```
 
 ## Qualidade
 
-* **79 testes automatizados** (cobrem API, grafo, chunking, RRF, threads, auth); dependências
+* **80 testes automatizados** (cobrem API, grafo, chunking, RRF, threads, auth, blindagem anti-marca); dependências
   pesadas (Qdrant, HF, Docling) isoladas por stubs/mocks — nenhum teste custa API
 * **100% de cobertura** de `api/src` (exigido conceitualmente; `ingest_docling` e vetores
   cobertos via Docling/Qdrant dublados)
-* **Eval dourado 16/16** (`hit@4`) sobre a base real ingerida
+* **Eval dourado 16/16** (`hit@4`) sobre a base fictícia ingerida
 * Lint + formatação com **Ruff**; pipeline **GitHub Actions** a cada push/PR
 
 ```bash
@@ -156,7 +157,7 @@ do módulo Projetos Práticos de IA da **Scoras Academy** (prof. **Anderson Amar
 A base (grafo triagem → retrieve → gerar com LangGraph) vem de lá; aqui ela foi
 evoluída para produto multiusuário: auth JWT, threads com memória e resumo,
 ingestão Docling, chunking por estrutura, RAG híbrido com stemming PT, fallback
-multi-LLM, frontend React, gestão de usuários, observabilidade, suite de 79 testes e CI.
+multi-LLM, frontend React, gestão de usuários, observabilidade, suite de 80 testes e CI.
 
 ## Roadmap
 

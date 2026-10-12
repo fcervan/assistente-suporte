@@ -11,3 +11,8 @@ node_modules/
 web/dist/
 data/processed/*
 !data/processed/.gitkeep
+# Blindagem: nenhum arquivo de marca/produto real entra no repo (a demo usa
+# apenas a base fictícia manual-acme-ficticio.pdf).
+*smartlabel*
+*SmartLabel*
+*SMARTLABEL*

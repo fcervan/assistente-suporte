@@ -56,30 +56,29 @@ def _tok(s: str) -> list[str]:
         return toks
 
 
-# Glossário Acme p/ expansão de query no BM25 (chaves já normalizadas,
-# sem acento): a pergunta usa "pedido/request", o manual usa
-# "encomenda/volume/transmissão/requisição". Grupos restritos ao domínio p/
-# não puxar o falso-amigo "mais de um documento fiscal por pedido" (§4.2).
+# Glossário logístico fictício p/ expansão de query no BM25 (chaves já
+# normalizadas, sem acento; base de exemplo Acme): a pergunta usa
+# "pedido/request", o manual fictício usa "pacote/remessa/solicitação".
+# Grupos restritos ao domínio p/ não puxar o falso-amigo "mais de um
+# documento fiscal por pedido" (§1.3).
 SINONIMOS = {
-    "pedido": ["encomenda", "volume", "lote"],
-    "pedidos": ["encomenda", "encomendas", "volume", "volumes", "lote"],
-    "encomenda": ["pedido", "volume"],
-    "encomendas": ["pedido", "pedidos", "volume", "volumes"],
-    "volume": ["pedido", "encomenda"],
-    "volumes": ["pedido", "pedidos", "encomenda", "encomendas"],
-    "request": ["requisicao", "transmissao", "solicitacao"],
-    "requests": ["requisicao", "transmissao"],
-    "requisicao": ["request", "transmissao"],
-    "requisicoes": ["request", "transmissao"],
-    "transmissao": ["request", "requisicao"],
-    "transmissoes": ["request", "requisicao"],
-    "lote": ["encomendas", "volumes"],
+    "pedido": ["pacote", "remessa", "lote"],
+    "pedidos": ["pacote", "pacotes", "remessa", "remessas", "lote"],
+    "pacote": ["pedido", "remessa"],
+    "pacotes": ["pedido", "pedidos", "remessa", "remessas"],
+    "remessa": ["pedido", "pacote"],
+    "remessas": ["pedido", "pedidos", "pacote", "pacotes"],
+    "request": ["solicitacao", "remessa", "solicitacoes"],
+    "requests": ["solicitacao", "remessa"],
+    "solicitacao": ["request", "remessa"],
+    "solicitacoes": ["request", "remessa"],
+    "lote": ["pacotes", "remessas"],
 }
 
 
 def expandir_query(query: str) -> str:
-    """Query original + sinônimos do domínio p/ o BM25 casar pergunta↔manual
-    ('pedido por request' casa 'volumes (encomendas)' e 'transmissão')."""
+    """Query original + sinônimos do domínio p/ o BM25 casar pergunta↔base
+    ('pedido por solicitação' casa 'pacotes (remessas)' e 'remessa')."""
     base = unicodedata.normalize("NFKD", query or "").encode("ascii", "ignore").decode()
     palavras = re.findall(r"[a-z0-9]+", base.lower())
     extras = [s for p in palavras for s in SINONIMOS.get(p, [])]

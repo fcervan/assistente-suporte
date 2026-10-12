@@ -14,7 +14,7 @@ def _doc():
             T(
                 "#/texts/2",
                 "text",
-                "Cada transmissão pode conter um ou mais volumes. " "Requisição no Anexo B.",
+                "Cada solicitação pode conter um ou mais pacotes. " "Detalhe no Anexo B.",
                 7,
             ),
             T("#/texts/3", "page_footer", "Página 7", 7),

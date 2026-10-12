@@ -397,7 +397,7 @@ def test_buscar_expande_sinonimos_e_funde(monkeypatch):
             pts = [
                 types.SimpleNamespace(
                     score=0.44,
-                    payload=payload("cada transmissao pode conter um ou mais volumes"),
+                    payload=payload("cada solicitacao pode conter um ou mais pacotes"),
                 ),
                 types.SimpleNamespace(
                     score=0.10, payload=payload("texto irrelevante de outro assunto")
@@ -411,7 +411,7 @@ def test_buscar_expande_sinonimos_e_funde(monkeypatch):
     monkeypatch.setitem(sys.modules, "qdrant_client.models", models)
     import src.embeddings as emb
 
-    assert "encomenda" in emb.expandir_query("mais de um pedido por request?")
+    assert "remessa" in emb.expandir_query("mais de um pedido por request?")
     assert emb.expandir_query("oi") == "oi" and emb.expandir_query("") == ""
     monkeypatch.setattr(emb, "embed_query", lambda q: [0.0])
     import src.vector_qdrant as vq

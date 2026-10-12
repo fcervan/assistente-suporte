@@ -169,7 +169,7 @@ export default function Chat() {
       </aside>
       <div className="chat-main" style={{ minWidth: 0 }}>
         <div className="card chat-scroll" ref={scrollRef}>
-          {hist.length === 0 && <div className="empty-state">Pergunte algo de TI — ex: como funciona a autenticação na API Acme?</div>}
+          {hist.length === 0 && <div className="empty-state">Pergunte algo de TI — ex: como funciona a autenticação na API de exemplo?</div>}
           {hist.map(bolha)}
           {loading && <div className="msg-row bot"><div className="bubble-bot"><span className="spinner" /> Gerando resposta…</div></div>}
           <div ref={bottomRef} />

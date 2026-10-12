@@ -106,7 +106,7 @@ def test_formatar_historico():
 
 
 def test_system_tem_glossario_e_desambiguacao():
-    assert "encomenda" in graph.SYSTEM and "pedido a pedido" in graph.SYSTEM
+    assert "remessa" in graph.SYSTEM and "pedido a pedido" in graph.SYSTEM
 
 
 def test_recuperar_com_erro_nao_quebra(monkeypatch):
