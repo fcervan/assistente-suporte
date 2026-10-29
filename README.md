@@ -87,17 +87,28 @@ python scripts/gerar_api_key.py
 
 - `DOCLING_API_KEY` (texto puro) fica **somente** no `.env` desta API.
 - `DOCLING_API_KEYS` (JSON com o hash SHA-256) é o que o serviço Docling usa para autenticar.
-- Em produção, guarde ambos no Secrets Manager/SSM — nunca no Git.
+- Em produção, guarde ambos em um gerenciador de segredos — nunca no Git.
 
 ### 2. Suba a aplicação
 
 ```bash
-# stack completa local (api + web + qdrant + docling-service)
-docker compose --profile docling up -d --build
+# Docling externo (padrão): suba a API/web/qdrant e use o docling-service já rodando
+docker compose up -d --build
 
-# ou, se o Docling já estiver na AWS/outro host:
-# DOCLING_URL=https://docling.exemplo.interno docker compose up -d --build
+# Alternativa: suba tudo junto pelo compose
+docker compose --profile docling up -d --build
 ```
+
+Com o Docling externo, ele precisa estar acessível pela URL configurada em `DOCLING_URL` (por padrão `http://docling:8765` na rede do compose). Para rodar o `docling-service` fora do compose e ainda usar o nome `docling`:
+
+```bash
+docker run -d --name docling-service \
+  --network assistente-suporte_default --network-alias docling \
+  -p 8765:8765 --env-file ../docling-service/.env --restart unless-stopped \
+  docling-service:latest
+```
+
+Não suba o perfil `docling` enquanto esse container estiver ativo: os dois disputam a porta 8765 e o alias `docling`.
 
 A primeira execução demora porque baixa e monta a imagem do `docling-service` (~7 GB) e as dependências da API. Acompanhe a subida com:
 
@@ -112,7 +123,7 @@ docker compose logs -f api
 |---|---|
 | Interface web | http://localhost:5175 |
 | Documentação interativa da API | http://localhost:8002/docs |
-| Docling service (conversão isolada) | http://localhost:8003/docs |
+| Docling service (conversão isolada) | http://localhost:8765/docs |
 | Painel do Qdrant | http://localhost:6333/dashboard |
 
 ### 4. Crie o primeiro administrador
@@ -296,10 +307,10 @@ assistente-suporte/
 ├── web/src/               # React 18 + Vite (Chat, Ingest, Admin, Usuarios, Observabilidade, Login; sidebar colapsável)
 ├── data/                  # raw (originais), processed (.md/.json) e DuckDB
 ├── tests/                 # 80 testes + CSV dourado (16 perguntas)
-└── docker-compose.yml     # api :8002 + web :5175 + qdrant :6333 + docling :8003
+└── docker-compose.yml     # api :8002 + web :5175 + qdrant :6333 + docling :8765
 ```
 
-O Docling vive no repositório irmão **`projetos/docling-service`** (FastAPI + API key + deploy AWS). Esta API só conhece o contrato HTTP `/v1/convert`.
+O Docling vive no repositório irmão **`projetos/docling-service`** (FastAPI + API key + deploy independente). Esta API só conhece o contrato HTTP `/v1/convert`.
 
 ## Qualidade
 

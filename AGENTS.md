@@ -7,7 +7,7 @@ RAG multi-usuário com base de conhecimento ingerida via Docling. Stack: **FastA
 Monorepo com dois apps + infra (tudo via `docker-compose.yml`):
 
 - **`api/`** — Backend FastAPI (Python 3.12) em `suporte-api:8002`. Auth JWT local, cliente HTTP do `docling-service`, RAG híbrido, grafo LangGraph.
-- **`docling-service`** — repositório irmão `../docling-service` (container `suporte-docling:8003`). FastAPI + Docling isolado, auth por API key, contrato `POST /v1/convert` → JSON estruturado + markdown. Deploy AWS independente.
+- **`docling-service`** — repositório irmão `../docling-service` (container `suporte-docling:8765` no perfil docling ou `docling-service` standalone na rede com alias `docling`). FastAPI + Docling isolado, auth por API key, contrato `POST /v1/convert` → JSON estruturado + markdown. Deploy independente.
 - **`web/`** — Frontend React 18 + Vite 6 (JSX, sem Tailwind, CSS próprio em `src/tokens.css`). Servido por nginx em `suporte-web:5175`.
 - **`qdrant`** — `qdrant/qdrant:latest` em `6333/6334`, volume `qdrant_storage`. Coleção `suporte_ti` (vetor denso + payload fonte/pagina).
 - **DuckDB** — embarcado via `pip` **dentro do container `api`** (`/app/data/duckdb/tickets.duckdb`, volume `./data`). Não existe "DuckDB server" — container separado não dá concorrência. Slot comentado para `postgres:5432` na v2 se a escrita concorrente estourar.
@@ -33,9 +33,9 @@ Toda mudança em `api/src` ou `web/src` (telas, endpoints, funções, contagens,
 
 ```bash
 cp .env.example .env   # preencher chaves + JWT_SECRET + DOCLING_API_KEY/DOCLING_API_KEYS
-docker compose --profile docling up -d --build   # 1ª vez (docling-service ~7GB + api torch)
-docker compose --profile docling up -d           # subidas seguintes (stack local)
-docker compose up -d                             # só api/web/qdrant (DOCLING_URL externo)
+docker compose up -d --build                     # api/web/qdrant + docling-service externo
+docker compose --profile docling up -d --build   # alternativa: sobe docling-service junto (~7GB + api torch)
+docker compose --profile docling up -d           # subidas seguintes (stack completa)
 docker compose down            # dados persistem (volumes)
 docker compose logs api|web|docling|qdrant
 docker compose up -d --build web   # rebuild só do frontend (~1 min)
@@ -45,9 +45,9 @@ python3 -m pytest tests/ -q
 python3 -m ruff check api/src tests
 ```
 
-Portas (verificadas livres no host): `8002` api, `5175` web, `8003` docling-service, `6333/6334` qdrant.
+Portas (verificadas livres no host): `8002` api, `5175` web, `8765` docling-service, `6333/6334` qdrant.
 
-O `docker-compose.yml` builda `../docling-service` — clone os dois repos lado a lado. Sem a key configurada, o serviço responde 503 (falha fechada).
+O `docker-compose.yml` builda `../docling-service` — clone os dois repos lado a lado. Sem a key configurada, o serviço responde 503 (falha fechada). Não use o perfil `docling` ao mesmo tempo que um container `docling-service` standalone na mesma porta/alias.
 
 ## Endpoints principais
 
@@ -91,6 +91,6 @@ Tabelas: `users(id,nome,email unique,hash,role)`, `tickets`, `interacoes(user_id
 
 ## Deploy / acesso local
 
-- Web: http://localhost:5175 · API docs: http://localhost:8002/docs · Docling: http://localhost:8003/docs · Qdrant: http://localhost:6333/dashboard
+- Web: http://localhost:5175 · API docs: http://localhost:8002/docs · Docling: http://localhost:8765/docs · Qdrant: http://localhost:6333/dashboard
 - Usuário admin local: `fcervan@local` / `123456` (criado via `/auth/register` com `role=admin`).
 - Base inicial de demonstração: `manual-acme-ficticio.pdf` (Manual da API Acme Fictícia, 100% inventado, gerado por script).

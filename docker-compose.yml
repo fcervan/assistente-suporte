@@ -14,7 +14,7 @@ services:
     container_name: suporte-docling
     profiles: ["docling"]
     ports:
-      - "8003:8000"
+      - "8765:8765"
     environment:
       - DOCLING_API_KEYS=${DOCLING_API_KEYS:-}
       - DOCLING_MAX_UPLOAD_MB=${DOCLING_MAX_UPLOAD_MB:-50}
@@ -34,7 +34,7 @@ services:
     environment:
       - QDRANT_URL=http://qdrant:6333
       - DUCKDB_PATH=/app/data/duckdb/tickets.duckdb
-      - DOCLING_URL=${DOCLING_URL:-http://docling:8000}
+      - DOCLING_URL=${DOCLING_URL:-http://docling:8765}
     volumes:
       - ./data:/app/data
     depends_on:
