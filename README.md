@@ -56,7 +56,8 @@ O Assistente de Suporte Técnico transforma esse material em uma central de resp
 - **Docker + Docker Compose** instalados.
 - **Uma chave de LLM** (recomendado: Groq). Ollama Cloud e OpenRouter são fallbacks opcionais.
 - **Portas livres:** `5175` (web), `8002` (API) e `6333/6334` (Qdrant).
-- **Espaço em disco:** a primeira build da API baixa torch + Docling (~7 GB de imagem).
+- **Espaço em disco:** a primeira build baixa a imagem do `docling-service` (~7 GB) e as dependências da API (torch/sentence-transformers).
+- **Repositórios irmãos:** clone o `assistente-suporte` e o `docling-service` lado a lado (o compose builda `../docling-service`).
 
 > Sem chave de LLM a aplicação ainda sobe e responde em modo extrativo, mas a qualidade das respostas é menor. Para uso real, configure pelo menos uma chave.
 
@@ -71,17 +72,34 @@ Edite o `.env` e preencha:
 ```dotenv
 GROQ_API_KEY=sua-chave-groq
 JWT_SECRET=um-segredo-longo-e-aleatorio
+DOCLING_API_KEY=sua-chave-do-docling
+DOCLING_API_KEYS={"assistente-suporte":"<sha256-da-chave>"}
 ```
 
 As demais variáveis já vêm com valores padrão. O arquivo `.env` contém segredos e **não deve ser versionado**.
 
+O par `DOCLING_API_KEY`/`DOCLING_API_KEYS` é gerado no repositório irmão:
+
+```bash
+cd ../docling-service
+python scripts/gerar_api_key.py
+```
+
+- `DOCLING_API_KEY` (texto puro) fica **somente** no `.env` desta API.
+- `DOCLING_API_KEYS` (JSON com o hash SHA-256) é o que o serviço Docling usa para autenticar.
+- Em produção, guarde ambos no Secrets Manager/SSM — nunca no Git.
+
 ### 2. Suba a aplicação
 
 ```bash
-docker compose up -d --build
+# stack completa local (api + web + qdrant + docling-service)
+docker compose --profile docling up -d --build
+
+# ou, se o Docling já estiver na AWS/outro host:
+# DOCLING_URL=https://docling.exemplo.interno docker compose up -d --build
 ```
 
-A primeira execução demora porque baixa e monta a imagem da API. Acompanhe a subida com:
+A primeira execução demora porque baixa e monta a imagem do `docling-service` (~7 GB) e as dependências da API. Acompanhe a subida com:
 
 ```bash
 docker compose ps
@@ -94,6 +112,7 @@ docker compose logs -f api
 |---|---|
 | Interface web | http://localhost:5175 |
 | Documentação interativa da API | http://localhost:8002/docs |
+| Docling service (conversão isolada) | http://localhost:8003/docs |
 | Painel do Qdrant | http://localhost:6333/dashboard |
 
 ### 4. Crie o primeiro administrador
@@ -118,7 +137,7 @@ Em produção, restrinja o endpoint de cadastro, use HTTPS e troque o `JWT_SECRE
 2. Abra a aba **Enviar docs**.
 3. Arraste os arquivos ou clique para selecionar.
 
-Formatos aceitos: **PDF, DOCX, PPTX, XLSX, CSV, HTML, XML, TXT e MD**.
+Formatos aceitos: **PDF, DOCX, PPTX, XLSX, CSV, HTML, XML, TXT e MD** — a conversão é feita pelo `docling-service` e volta como JSON estruturado.
 
 Para testar sem material próprio, use `data/raw/manual-acme-ficticio.pdf` — um manual 100% inventado, gerado por script, sem vínculo com nenhuma empresa real. Depois de ingerido, experimente perguntas como “Como funciona a autenticação?” ou “O que é o método CriarPacote?”.
 
@@ -131,11 +150,13 @@ docker compose exec api python -m src.reingest_v2
 ### 6. Comandos do dia a dia
 
 ```bash
-docker compose up -d              # subir sem rebuild
-docker compose stop               # parar os containers
-docker compose down               # parar e remover containers (dados persistem)
-docker compose logs -f api        # acompanhar logs da API
-docker compose up -d --build web  # rebuild apenas do frontend (~1 min)
+docker compose --profile docling up -d   # subir a stack local completa
+docker compose up -d                     # subir só api/web/qdrant (Docling externo)
+docker compose stop                      # parar os containers
+docker compose down                      # parar e remover containers (dados persistem)
+docker compose logs -f api               # acompanhar logs da API
+docker compose logs -f docling           # logs do serviço de conversão
+docker compose up -d --build web         # rebuild apenas do frontend (~1 min)
 ```
 
 ### Se algo não subir
@@ -146,6 +167,8 @@ docker compose up -d --build web  # rebuild apenas do frontend (~1 min)
 | API não responde | Veja `docker compose logs api` e confirme o `.env` (principalmente `JWT_SECRET` e a chave do provedor). |
 | Primeira resposta lenta | O startup faz warm-up dos embeddings; as próximas respostas tendem a ser mais rápidas. |
 | Respostas sem fonte ou escaladas | Confirme se os documentos foram ingeridos e se aparecem no painel do Qdrant. |
+| Ingestão retorna 502 | Verifique `docker compose logs docling` e se `DOCLING_API_KEY` (API) e `DOCLING_API_KEYS` (serviço) formam o par correto. |
+| Docling responde 401/503 | A key está ausente/errada ou `DOCLING_API_KEYS` não foi configurado (o serviço falha fechado). |
 | Frontend com tela em branco | Rebuild com `docker compose up -d --build web` e confira a URL da API no console. |
 
 ### Atalho para testar sem instalar
@@ -177,12 +200,12 @@ A base de demonstração é fictícia e serve apenas para exercitar o pipeline d
 ### Visão geral
 
 ```
-Ingestão:  upload (admin) → Docling → markdown/JSON → chunk → embeddings → Qdrant
+Ingestão:  upload (admin) → docling-service (HTTP) → markdown/JSON → chunk → embeddings → Qdrant
 Chat:      pergunta + histórico + resumo → triagem → rewrite → retrieve híbrido
            → grade → gerar com citação | escalar → log no DuckDB
 ```
 
-**Stack:** FastAPI + React 18 + LangGraph + Qdrant + DuckDB embarcado + Docling + sentence-transformers + BM25 + Docker.
+**Stack:** FastAPI + React 18 + LangGraph + Qdrant + DuckDB embarcado + `docling-service` (Docling isolado) + sentence-transformers + BM25 + Docker.
 
 ### O grafo LangGraph
 
@@ -231,7 +254,7 @@ Interface em http://localhost:5175. O layout é fluido (painel até 1760px) e a 
 | Tela | Acesso | O que faz |
 |---|---|---|
 | Chat | todos | Threads estilo ChatGPT (criar, renomear, apagar; título completo em tooltip; `N msgs · dd/mm/aaaa às hh:mm`); textarea fixa no rodapé (Enter envia, Shift+Enter quebra linha), autoscroll, citações de fonte e badge de escalação. |
-| Enviar docs | admin | Ingestão Docling por clique ou arrastar-e-soltar (dropzone com lista, tamanho e remoção) → markdown → chunk → Qdrant. |
+| Enviar docs | admin | Ingestão pelo `docling-service` por clique ou arrastar-e-soltar (dropzone com lista, tamanho e remoção) → markdown/JSON → chunk → Qdrant. |
 | Tickets | todos | Últimas interações do próprio usuário. |
 | Usuários | admin | CRUD de usuários (nome, e-mail, senha, perfil `user`/`admin`; bloqueia auto-remoção e auto-rebaixamento). |
 | Observabilidade | admin | Log global com filtros (provedor, limite, somente escalados) + métricas (total, escaladas e %, usuários ativos, top provedores). |
@@ -265,7 +288,7 @@ assistente-suporte/
 │   ├── vector_qdrant.py   # upsert/wipe/busca híbrida (coleção suporte_ti)
 │   ├── embeddings.py      # MiniLM multilíngue + BM25 com stemming PT + RRF
 │   ├── duckdb_store.py    # users (+CRUD), threads (título+resumo), interacoes (+logs/stats globais, ensure_admin)
-│   ├── ingest_docling.py  # Docling: raw -> processed (.md + .json)
+│   ├── ingest_docling.py  # cliente HTTP do docling-service: raw -> processed (.md + .json)
 │   ├── reingest_v2.py     # wipe + reimportação total em v2
 │   ├── eval_douradas.py   # eval hit@k sobre tests/douradas.csv
 │   ├── llm_client.py      # fallback Groq → Ollama Cloud → OpenRouter
@@ -273,13 +296,15 @@ assistente-suporte/
 ├── web/src/               # React 18 + Vite (Chat, Ingest, Admin, Usuarios, Observabilidade, Login; sidebar colapsável)
 ├── data/                  # raw (originais), processed (.md/.json) e DuckDB
 ├── tests/                 # 80 testes + CSV dourado (16 perguntas)
-└── docker-compose.yml     # api :8002 + web :5175 + qdrant :6333
+└── docker-compose.yml     # api :8002 + web :5175 + qdrant :6333 + docling :8003
 ```
+
+O Docling vive no repositório irmão **`projetos/docling-service`** (FastAPI + API key + deploy AWS). Esta API só conhece o contrato HTTP `/v1/convert`.
 
 ## Qualidade
 
-- **80 testes automatizados** cobrindo API, grafo, chunking, RRF, threads, auth e blindagem anti-marca. Dependências pesadas (Qdrant, HF, Docling) são isoladas por stubs/mocks; nenhum teste consome API.
-- **100% de cobertura** de `api/src`; `ingest_docling` e vetores são cobertos via Docling/Qdrant dublados.
+- **86 testes automatizados** cobrindo API, grafo, chunking, RRF, threads, auth, CRUD admin e blindagem anti-marca. Dependências pesadas (Qdrant, HF, HTTP/Docling) são isoladas por stubs/mocks; nenhum teste consome API externa.
+- **100% de cobertura** de `api/src`; `ingest_docling` (cliente HTTP) e vetores são cobertos via httpx/Qdrant dublados.
 - **Eval dourado 16/16** (`hit@4`) sobre a base fictícia ingerida.
 - **Ruff** para lint e formatação, com pipeline de **GitHub Actions** a cada push/PR.
 
@@ -303,6 +328,6 @@ docker compose exec api python -m src.eval_douradas --csv tests/douradas.csv
 
 Projeto derivado do notebook [agente_de_suporte_langgraph.ipynb](https://github.com/Scoras-Academy/Projetos_Praticos_de_IA/blob/main/Projetos_praticos_de_IA/agente_de_suporte_langgraph.ipynb) do módulo Projetos Práticos de IA da **Scoras Academy** (prof. **Anderson Amaral**).
 
-A base (grafo triagem → retrieve → gerar com LangGraph) vem de lá; aqui ela foi evoluída para produto multiusuário: auth JWT, threads com memória e resumo, ingestão Docling, chunking por estrutura, RAG híbrido com stemming PT, fallback multi-LLM, frontend React, gestão de usuários, observabilidade, suite de 80 testes e CI.
+A base (grafo triagem → retrieve → gerar com LangGraph) vem de lá; aqui ela foi evoluída para produto multiusuário: auth JWT, threads com memória e resumo, ingestão via `docling-service`, chunking por estrutura, RAG híbrido com stemming PT, fallback multi-LLM, frontend React, gestão de usuários, observabilidade, suite de 86 testes e CI. O serviço Docling foi extraído para reutilização por outras aplicações.
 
 Distribuído sob a licença MIT — veja [LICENSE](LICENSE).

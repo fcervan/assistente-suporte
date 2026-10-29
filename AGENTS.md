@@ -6,7 +6,8 @@ RAG multi-usuário com base de conhecimento ingerida via Docling. Stack: **FastA
 
 Monorepo com dois apps + infra (tudo via `docker-compose.yml`):
 
-- **`api/`** — Backend FastAPI (Python 3.12) em `suporte-api:8002`. Auth JWT local, ingestão Docling, RAG híbrido, grafo LangGraph.
+- **`api/`** — Backend FastAPI (Python 3.12) em `suporte-api:8002`. Auth JWT local, cliente HTTP do `docling-service`, RAG híbrido, grafo LangGraph.
+- **`docling-service`** — repositório irmão `../docling-service` (container `suporte-docling:8003`). FastAPI + Docling isolado, auth por API key, contrato `POST /v1/convert` → JSON estruturado + markdown. Deploy AWS independente.
 - **`web/`** — Frontend React 18 + Vite 6 (JSX, sem Tailwind, CSS próprio em `src/tokens.css`). Servido por nginx em `suporte-web:5175`.
 - **`qdrant`** — `qdrant/qdrant:latest` em `6333/6334`, volume `qdrant_storage`. Coleção `suporte_ti` (vetor denso + payload fonte/pagina).
 - **DuckDB** — embarcado via `pip` **dentro do container `api`** (`/app/data/duckdb/tickets.duckdb`, volume `./data`). Não existe "DuckDB server" — container separado não dá concorrência. Slot comentado para `postgres:5432` na v2 se a escrita concorrente estourar.
@@ -14,7 +15,7 @@ Monorepo com dois apps + infra (tudo via `docker-compose.yml`):
 ### Fluxo
 
 ```
-Upload (admin) → Docling → data/processed (.md+.json) → chunk → embeddings PT → Qdrant
+Upload (admin) → docling-service (HTTP) → data/processed (.md+.json) → chunk → embeddings PT → Qdrant
 Chat → triagem → retrieve híbrido (denso+BM25/RRF) → grade → gerar c/ citação → escalate → log DuckDB
 ```
 
@@ -31,11 +32,12 @@ Toda mudança em `api/src` ou `web/src` (telas, endpoints, funções, contagens,
 ## Comandos
 
 ```bash
-cp .env.example .env   # preencher chaves + JWT_SECRET
-docker compose up -d --build   # primeira vez (api ~7GB: torch+docling; demora)
-docker compose up -d           # subidas seguintes
+cp .env.example .env   # preencher chaves + JWT_SECRET + DOCLING_API_KEY/DOCLING_API_KEYS
+docker compose --profile docling up -d --build   # 1ª vez (docling-service ~7GB + api torch)
+docker compose --profile docling up -d           # subidas seguintes (stack local)
+docker compose up -d                             # só api/web/qdrant (DOCLING_URL externo)
 docker compose down            # dados persistem (volumes)
-docker compose logs api|web|qdrant
+docker compose logs api|web|docling|qdrant
 docker compose up -d --build web   # rebuild só do frontend (~1 min)
 
 # Testes backend (pip install -r requirements-dev.txt; duckdb incluso)
@@ -43,7 +45,9 @@ python3 -m pytest tests/ -q
 python3 -m ruff check api/src tests
 ```
 
-Portas (verificadas livres no host): `8002` api, `5175` web, `6333/6334` qdrant.
+Portas (verificadas livres no host): `8002` api, `5175` web, `8003` docling-service, `6333/6334` qdrant.
+
+O `docker-compose.yml` builda `../docling-service` — clone os dois repos lado a lado. Sem a key configurada, o serviço responde 503 (falha fechada).
 
 ## Endpoints principais
 
@@ -53,7 +57,7 @@ Portas (verificadas livres no host): `8002` api, `5175` web, `6333/6334` qdrant.
 - `GET /me` — perfil
 - `POST /chat` `{mensagem, thread_id}` → `{resposta, fontes[{fonte,pagina,score}], escalado, provedor}`
 - `POST /chat/stream` — SSE
-- `POST /ingest` (só admin, multipart) — PDF/DOCX/PPTX/XLSX/CSV/HTML/XML/TXT/MD → `{arquivos, chunks, detalhe}`
+- `POST /ingest` (só admin, multipart) — envia ao docling-service e indexa PDF/DOCX/PPTX/XLSX/CSV/HTML/XML/TXT/MD → `{arquivos, chunks, detalhe}`
 - `GET /tickets` — últimas interações do usuário
 - `GET/POST /users`, `PATCH/DELETE /users/{id}` (só admin; bloqueia auto-remoção e auto-rebaixamento)
 - `GET /admin/logs`, `GET /admin/stats` (só admin — observabilidade global)
@@ -77,14 +81,16 @@ Tabelas: `users(id,nome,email unique,hash,role)`, `tickets`, `interacoes(user_id
 ## Armadilhas já resolvidas (não reintroduzir)
 
 1. `passlib 1.7.4 + bcrypt>=4.1` quebra o hash (`72 bytes`) → `bcrypt==4.0.1` pinado em `api/requirements.txt`.
-2. Imagem `python:3.12-slim` sem libs do OpenCV (`libxcb.so.1`) → `Dockerfile` instala `libgl1 libxcb1 libglib2.0-0 libsm6 libxext6 libxrender1`.
-3. `DoclingDocument` não tem `export_to_json` → usar `json.dumps(doc.export_to_dict())`.
+2. Imagem `python:3.12-slim` do **docling-service** precisa das libs do OpenCV (`libxcb.so.1`) → Dockerfile de lá instala `libgl1 libxcb1 libglib2.0-0 libsm6 libxext6 libxrender1`. A API não usa mais essas libs.
+3. `DoclingDocument` não tem `export_to_json` → o serviço usa `json.dumps(doc.export_to_dict())` e devolve `document` + `markdown`.
 4. Chaves retornadas pelos nodes **precisam existir no `State`** do LangGraph (ex: `provedor: str`) ou são descartadas em silêncio.
 5. `web/vite.config.js` **exige `@vitejs/plugin-react`** — sem ele o JSX compila em modo clássico e dá `React is not defined` com tela em branco.
 6. Screenshot headless com `--virtual-time-budget` congela CSS animations no frame 0 (parece tela vazia) — usar `--timeout` para captura fiel.
+7. Ingestão agora é HTTP: erro 502 = docling-service fora; 401/503 = par `DOCLING_API_KEY`/`DOCLING_API_KEYS` ausente ou errado.
+8. `docker compose` builda `../docling-service`; sem o repo irmão o build falha — ajuste o contexto ou suba só a imagem publicada.
 
 ## Deploy / acesso local
 
-- Web: http://localhost:5175 · API docs: http://localhost:8002/docs · Qdrant: http://localhost:6333/dashboard
+- Web: http://localhost:5175 · API docs: http://localhost:8002/docs · Docling: http://localhost:8003/docs · Qdrant: http://localhost:6333/dashboard
 - Usuário admin local: `fcervan@local` / `123456` (criado via `/auth/register` com `role=admin`).
 - Base inicial de demonstração: `manual-acme-ficticio.pdf` (Manual da API Acme Fictícia, 100% inventado, gerado por script).

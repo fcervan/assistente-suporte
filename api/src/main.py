@@ -193,7 +193,10 @@ def ingest(files: list[UploadFile] = File(...), user: dict = Depends(auth.admin)
     for f in files:
         destino = raw / f.filename
         destino.write_bytes(f.file.read())
-        info = ing.converter_arquivo(destino, proc)
+        try:
+            info = ing.converter_arquivo(destino, proc)
+        except ing.DoclingError as exc:
+            raise HTTPException(502, str(exc)) from None
         doc_id = ""
         if destino.suffix.lower() in {".csv", ".xlsx"}:
             texto = Path(info["md_path"]).read_text(encoding="utf-8")

@@ -24,7 +24,7 @@ export default function Ingest() {
     e.preventDefault();
     const sel = inputRef.current?.files?.length ? Array.from(inputRef.current.files) : files;
     if (!sel.length) { setStatus("Selecione ou arraste ao menos 1 arquivo."); return; }
-    setLoading(true); setStatus("Processando via Docling...");
+    setLoading(true); setStatus("Processando via docling-service...");
     const fd = new FormData();
     for (const f of sel) fd.append("files", f);
     const t = localStorage.getItem("suporte_token") || "";
@@ -53,8 +53,8 @@ export default function Ingest() {
 
   return (
     <div className="card animate-fade-in">
-      <h3 style={{ margin: "0 0 4px", color: "var(--blue-500)" }}>Ingestão (admin) — Docling</h3>
-      <p className="fonte" style={{ margin: "0 0 16px" }}>PDF/DOCX/XLSX/CSV/HTML/XML → markdown → chunk → Qdrant. Clique ou arraste os arquivos.</p>
+      <h3 style={{ margin: "0 0 4px", color: "var(--blue-500)" }}>Ingestão (admin) — docling-service</h3>
+      <p className="fonte" style={{ margin: "0 0 16px" }}>PDF/DOCX/XLSX/CSV/HTML/XML → docling-service (JSON + markdown) → chunk → Qdrant. Clique ou arraste os arquivos.</p>
       <form onSubmit={processar} style={{ display: "grid", gap: 12 }}>
         <div className={`dropzone ${drag ? "active" : ""}`}
              onClick={() => inputRef.current?.click()}

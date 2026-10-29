@@ -14,3 +14,6 @@ EMBED_MODEL = os.getenv(
 CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "800"))
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "120"))
 VERSAO_CHUNK = os.getenv("VERSAO_CHUNK", "v2")
+DOCLING_URL = os.getenv("DOCLING_URL", "http://localhost:8003")
+DOCLING_API_KEY = os.getenv("DOCLING_API_KEY", "")
+DOCLING_TIMEOUT = float(os.getenv("DOCLING_TIMEOUT", "300"))

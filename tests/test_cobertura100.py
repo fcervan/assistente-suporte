@@ -208,38 +208,18 @@ def test_reimportar_e_main(tmp_path, monkeypatch):
     rv.main()
 
 
-def test_ingest_docling_stub(tmp_path, monkeypatch):
+def test_ingest_docling_cliente_http(tmp_path, monkeypatch):
     import src.ingest_docling as ing
 
-    doc_mod = types.ModuleType("docling")
-    conv_mod = types.ModuleType("docling.document_converter")
+    chamadas = []
 
-    class Doc:
-        def __init__(self, ruim=False):
-            self._ruim = ruim
+    def fake_post(url, headers=None, files=None, timeout=None):
+        chamadas.append({"url": url, "headers": headers, "timeout": timeout})
+        corpo = {"document": {"texts": []}, "markdown": "# titulo", "tabelas": 2}
+        return types.SimpleNamespace(status_code=200, json=lambda: corpo)
 
-        def export_to_markdown(self):
-            return "# titulo"
-
-        def export_to_dict(self):
-            return {"texts": []}
-
-        @property
-        def tables(self):
-            if self._ruim:
-                raise RuntimeError("sem tabelas")
-            return [1, 2]
-
-    class Conv:
-        def __init__(self, ruim=False):
-            self._ruim = ruim
-
-        def convert(self, path):
-            return types.SimpleNamespace(document=Doc(self._ruim))
-
-    conv_mod.DocumentConverter = Conv
-    monkeypatch.setitem(sys.modules, "docling", doc_mod)
-    monkeypatch.setitem(sys.modules, "docling.document_converter", conv_mod)
+    monkeypatch.setattr(config, "DOCLING_API_KEY", "chave-teste")
+    monkeypatch.setattr(ing.httpx, "post", fake_post)
     raw = tmp_path / "raw"
     out = tmp_path / "out"
     raw.mkdir()
@@ -248,11 +228,67 @@ def test_ingest_docling_stub(tmp_path, monkeypatch):
     (raw / "sub").mkdir()
     info = ing.converter_arquivo(raw / "a.pdf", out)
     assert info["tabelas"] == 2 and (out / "a.md").exists()
-    Conv.__init__ = lambda self: setattr(self, "_ruim", True)
-    info2 = ing.converter_arquivo(raw / "a.pdf", out)
-    assert info2["tabelas"] == 0
+    assert (out / "a.json").read_text(encoding="utf-8") == '{"texts": []}'
+    assert chamadas[0]["url"].endswith("/v1/convert")
+    assert chamadas[0]["headers"]["X-API-Key"] == "chave-teste"
     feitos = ing.ingerir_pasta(str(raw), str(out))
     assert [f["arquivo"] for f in feitos] == ["a.pdf"]
+
+
+def test_ingest_docling_erros(tmp_path, monkeypatch):
+    import src.ingest_docling as ing
+
+    raw = tmp_path / "raw"
+    out = tmp_path / "out"
+    raw.mkdir()
+    arq = raw / "a.pdf"
+    arq.write_bytes(b"%PDF")
+
+    monkeypatch.setattr(
+        ing.httpx, "post", lambda *a, **k: types.SimpleNamespace(status_code=500, json=dict)
+    )
+    with pytest.raises(ing.DoclingError):
+        ing.converter_arquivo(arq, out)
+
+    monkeypatch.setattr(
+        ing.httpx,
+        "post",
+        lambda *a, **k: types.SimpleNamespace(status_code=200, json=lambda: {"markdown": "x"}),
+    )
+    with pytest.raises(ing.DoclingError):
+        ing.converter_arquivo(arq, out)
+
+    def sem_json(*a, **k):
+        return types.SimpleNamespace(
+            status_code=200, json=lambda: (_ for _ in ()).throw(ValueError("ruim"))
+        )
+
+    monkeypatch.setattr(ing.httpx, "post", sem_json)
+    with pytest.raises(ing.DoclingError):
+        ing.converter_arquivo(arq, out)
+
+    monkeypatch.setattr(
+        ing.httpx,
+        "post",
+        lambda *a, **k: types.SimpleNamespace(
+            status_code=200, json=lambda: {"document": {"texts": []}, "tabelas": "abc"}
+        ),
+    )
+    assert ing.converter_arquivo(arq, out)["tabelas"] == 0
+
+    def timeout(*a, **k):
+        raise ing.httpx.TimeoutException("estourou")
+
+    monkeypatch.setattr(ing.httpx, "post", timeout)
+    with pytest.raises(ing.DoclingError):
+        ing.converter_arquivo(arq, out)
+
+    def indisponivel(*a, **k):
+        raise ing.httpx.ConnectError("fora")
+
+    monkeypatch.setattr(ing.httpx, "post", indisponivel)
+    with pytest.raises(ing.DoclingError):
+        ing.converter_arquivo(arq, out)
 
 
 def test_llm_verbose_e_inits_quebrando(monkeypatch, capsys):
@@ -462,3 +498,14 @@ def test_main_entrypoints(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "argv", ["x", "--proc", str(proc), "--no-wipe"])
     with pytest.raises(SystemExit):
         runpy.run_module("src.reingest_v2", run_name="__main__")
+
+
+def test_startup_ensure_admin_falha(user2, monkeypatch):
+    import src.embeddings as emb
+    from src import main
+
+    monkeypatch.setattr(emb, "modelo", lambda: True)
+    monkeypatch.setattr(
+        main.duckdb_store, "ensure_admin", lambda *a, **k: (_ for _ in ()).throw(RuntimeError())
+    )
+    main._startup()

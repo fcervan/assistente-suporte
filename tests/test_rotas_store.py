@@ -254,6 +254,30 @@ def test_ingest_csv_e_md(tmp_path, monkeypatch, user):
     assert any(g.get("secao") == "" and "conteudo util" in g["texto"] for g in gravados)
 
 
+def test_ingest_docling_indisponivel_502(tmp_path, monkeypatch):
+    import io
+
+    from fastapi import UploadFile
+
+    monkeypatch.chdir(tmp_path)
+    admin = {"id": 1, "email": "a@a", "role": "admin", "nome": "A"}
+
+    class DoclingError(RuntimeError):
+        pass
+
+    def quebra(_origem, _destino):
+        raise DoclingError("serviço fora")
+
+    ing_mod = types.ModuleType("src.ingest_docling")
+    ing_mod.DoclingError = DoclingError
+    ing_mod.converter_arquivo = quebra
+    _stub_src(monkeypatch, "ingest_docling", ing_mod)
+
+    with pytest.raises(HTTPException) as exc:
+        main.ingest(files=[UploadFile(filename="a.pdf", file=io.BytesIO(b"%PDF"))], user=admin)
+    assert exc.value.status_code == 502
+
+
 def test_llm_client_ollama_e_openrouter(monkeypatch):
     for k in ("GROQ_API_KEY", "OLLAMA_CLOUD_API_KEY", "OPENROUTER_API_KEY"):
         monkeypatch.delenv(k, raising=False)
@@ -291,3 +315,70 @@ def test_eval_carregar_e_norm():
     casos = carregar("tests/douradas.csv")
     assert len(casos) == 16 and all(kws for _, kws in casos)
     assert norm("Autenticação 200!") == "autenticacao 200!"
+
+
+def test_admin_users_crud_e_observabilidade(db):
+    admin = store.create_user("Adm", "adm@x", auth.hash_senha("123456"), "admin")
+    assert main.listar_users(admin)[0].email == "adm@x"
+    novo = main.criar_user(
+        schemas.UserCreateIn(nome="U", email="u@x", senha="123456", role="user"), admin
+    )
+    assert novo.role == "user"
+    with pytest.raises(HTTPException) as exc:
+        main.criar_user(
+            schemas.UserCreateIn(nome="U", email="u@x", senha="123456", role="user"), admin
+        )
+    assert exc.value.status_code == 400
+
+    editado = main.editar_user(
+        novo.id, schemas.UserUpdateIn(nome="U2", role="admin", senha="abcdef"), admin
+    )
+    assert editado.nome == "U2" and editado.role == "admin"
+    with pytest.raises(HTTPException) as exc:
+        main.editar_user(999, schemas.UserUpdateIn(), admin)
+    assert exc.value.status_code == 404
+    with pytest.raises(HTTPException) as exc:
+        main.editar_user(admin["id"], schemas.UserUpdateIn(role="user"), admin)
+    assert exc.value.status_code == 400
+    with pytest.raises(HTTPException) as exc:
+        main.editar_user(novo.id, schemas.UserUpdateIn(senha="123"), admin)
+    assert exc.value.status_code == 400
+
+    with pytest.raises(HTTPException) as exc:
+        main.remover_user(admin["id"], admin)
+    assert exc.value.status_code == 400
+    with pytest.raises(HTTPException) as exc:
+        main.remover_user(999, admin)
+    assert exc.value.status_code == 404
+
+    store.log_interacao(admin["id"], "t1", "p", "r", True, provedor="groq")
+    assert main.admin_logs(limit=0, somente_escalados=True, provedor="groq", user=admin)
+    assert main.admin_stats(admin)["total"] >= 1
+    assert main.remover_user(novo.id, admin) == {"ok": True}
+
+
+def test_ensure_admin_branches(db):
+    assert store.update_user(999) is None
+    assert store.ensure_admin("novo@x") is None
+    criado = store.ensure_admin("novo@x", hash_="h")
+    assert criado["role"] == "admin"
+    store.create_user("U", "u2@x", "h", "user")
+    assert store.ensure_admin("u2@x")["role"] == "admin"
+    assert store.ensure_admin("u2@x")["role"] == "admin"
+
+
+def test_consultas_com_banco_quebrado(db, monkeypatch):
+    class FakeCon:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def execute(self, *_args, **_kwargs):
+            raise RuntimeError("banco fora")
+
+    monkeypatch.setattr(store, "connect", lambda: FakeCon())
+    assert store.list_users() == []
+    assert store.logs_globais() == []
+    assert store.stats_globais()["total"] == 0

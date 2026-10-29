@@ -9,6 +9,21 @@ services:
       - qdrant_storage:/qdrant/storage
     restart: unless-stopped
 
+  docling:
+    build: ../docling-service
+    container_name: suporte-docling
+    profiles: ["docling"]
+    ports:
+      - "8003:8000"
+    environment:
+      - DOCLING_API_KEYS=${DOCLING_API_KEYS:-}
+      - DOCLING_MAX_UPLOAD_MB=${DOCLING_MAX_UPLOAD_MB:-50}
+      - DOCLING_CONVERT_TIMEOUT=${DOCLING_CONVERT_TIMEOUT:-300}
+      - DOCLING_RATE_LIMIT_PER_MINUTE=${DOCLING_RATE_LIMIT_PER_MINUTE:-60}
+      - DOCLING_MAX_WORKERS=${DOCLING_MAX_WORKERS:-2}
+      - DOCLING_DOCS_ENABLED=${DOCLING_DOCS_ENABLED:-1}
+    restart: unless-stopped
+
   api:
     build: ./api
     container_name: suporte-api
@@ -19,6 +34,7 @@ services:
     environment:
       - QDRANT_URL=http://qdrant:6333
       - DUCKDB_PATH=/app/data/duckdb/tickets.duckdb
+      - DOCLING_URL=${DOCLING_URL:-http://docling:8000}
     volumes:
       - ./data:/app/data
     depends_on:
