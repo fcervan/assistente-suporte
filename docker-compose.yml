@@ -11,10 +11,11 @@ services:
 
   docling:
     build: ../docling-service
+    image: docling-service:latest
     container_name: suporte-docling
     profiles: ["docling"]
     ports:
-      - "8765:8765"
+      - "127.0.0.1:8765:8765"
     environment:
       - DOCLING_API_KEYS=${DOCLING_API_KEYS:-}
       - DOCLING_MAX_UPLOAD_MB=${DOCLING_MAX_UPLOAD_MB:-50}
@@ -22,6 +23,11 @@ services:
       - DOCLING_RATE_LIMIT_PER_MINUTE=${DOCLING_RATE_LIMIT_PER_MINUTE:-60}
       - DOCLING_MAX_WORKERS=${DOCLING_MAX_WORKERS:-2}
       - DOCLING_DOCS_ENABLED=${DOCLING_DOCS_ENABLED:-1}
+      - DOCLING_OCR_MODE=${DOCLING_OCR_MODE:-auto}
+      - DOCLING_IDLE_UNLOAD_SECONDS=${DOCLING_IDLE_UNLOAD_SECONDS:-900}
+    mem_limit: 2g
+    memswap_limit: 2g
+    cpus: 1.5
     restart: unless-stopped
 
   api:

@@ -88,9 +88,13 @@ Tabelas: `users(id,nome,email unique,hash,role)`, `tickets`, `interacoes(user_id
 6. Screenshot headless com `--virtual-time-budget` congela CSS animations no frame 0 (parece tela vazia) — usar `--timeout` para captura fiel.
 7. Ingestão agora é HTTP: erro 502 = docling-service fora; 401/503 = par `DOCLING_API_KEY`/`DOCLING_API_KEYS` ausente ou errado.
 8. `docker compose` builda `../docling-service`; sem o repo irmão o build falha — ajuste o contexto ou suba só a imagem publicada.
+9. `docling==2.145.0` puxa **torch CUDA** por padrão (+3 GB de libs `nvidia-*`, inúteis sem GPU). O Dockerfile do serviço instala `torch`/`torchvision` do índice `whl/cpu` **antes** do `requirements.txt`; não inverta a ordem.
+10. O perfil `docling` exige `DOCLING_API_KEYS` no `.env` (JSON `{"app":"<sha256>"}` da `DOCLING_API_KEY`); sem isso o serviço sobe em 503 (fail-closed). Sem o container, `DOCLING_URL=http://docling:8765` não resolve e `/ingest` dá 502.
+11. Docling segura os modelos em memória após a 1ª conversão (~1 GiB CPU-only). `DOCLING_IDLE_UNLOAD_SECONDS` (default 900) libera por inatividade; o compose limita `mem_limit: 2g` e publica a porta só em `127.0.0.1`.
 
 ## Deploy / acesso local
 
 - Web: http://localhost:5175 · API docs: http://localhost:8002/docs · Docling: http://localhost:8765/docs · Qdrant: http://localhost:6333/dashboard
 - Usuário admin local: `fcervan@local` / `123456` (criado via `/auth/register` com `role=admin`).
 - Base inicial de demonstração: `manual-acme-ficticio.pdf` (Manual da API Acme Fictícia, 100% inventado, gerado por script).
+- Produção (`54.84.21.248`): só o `docling-service` deste projeto está lá (api/web/qdrant não). Deploy em `/var/www/docling-service`, porta `127.0.0.1:8765`, `mem_limit: 2g`, imagem CPU-only (~2,7 GB). Fica **parado** por padrão (`docker compose stop`); suba com `sudo docker compose up -d` quando for ingerir e pare depois. A key antiga foi revogada — gere um novo par antes de usar.

@@ -56,7 +56,7 @@ O Assistente de Suporte Técnico transforma esse material em uma central de resp
 - **Docker + Docker Compose** instalados.
 - **Uma chave de LLM** (recomendado: Groq). Ollama Cloud e OpenRouter são fallbacks opcionais.
 - **Portas livres:** `5175` (web), `8002` (API) e `6333/6334` (Qdrant).
-- **Espaço em disco:** a primeira build baixa a imagem do `docling-service` (~7 GB) e as dependências da API (torch/sentence-transformers).
+- **Espaço em disco:** a primeira build baixa a imagem do `docling-service` (~7–8 GB, CPU-only) e as dependências da API (torch/sentence-transformers).
 - **Repositórios irmãos:** clone o `assistente-suporte` e o `docling-service` lado a lado (o compose builda `../docling-service`).
 
 > Sem chave de LLM a aplicação ainda sobe e responde em modo extrativo, mas a qualidade das respostas é menor. Para uso real, configure pelo menos uma chave.
@@ -104,9 +104,12 @@ Com o Docling externo, ele precisa estar acessível pela URL configurada em `DOC
 ```bash
 docker run -d --name docling-service \
   --network assistente-suporte_default --network-alias docling \
-  -p 8765:8765 --env-file ../docling-service/.env --restart unless-stopped \
+  -p 127.0.0.1:8765:8765 --env-file ../docling-service/.env --restart unless-stopped \
+  --memory 2g --cpus 1.5 \
   docling-service:latest
 ```
+
+> Sem o container `docling` (nem o perfil `--profile docling`), o hostname `docling` não resolve e o `/ingest` responde **502**. O perfil sobe o serviço em `127.0.0.1:8765`; a API fala com ele pela rede interna.
 
 Não suba o perfil `docling` enquanto esse container estiver ativo: os dois disputam a porta 8765 e o alias `docling`.
 
@@ -148,7 +151,7 @@ Em produção, restrinja o endpoint de cadastro, use HTTPS e troque o `JWT_SECRE
 2. Abra a aba **Enviar docs**.
 3. Arraste os arquivos ou clique para selecionar.
 
-Formatos aceitos: **PDF, DOCX, PPTX, XLSX, CSV, HTML, XML, TXT e MD** — a conversão é feita pelo `docling-service` e volta como JSON estruturado.
+Formatos aceitos: **PDF, DOCX, PPTX, XLSX, CSV, HTML, XML, TXT e MD** — a conversão é feita pelo `docling-service` e volta como JSON estruturado. O serviço roda **CPU-only**, converte **sem OCR** por padrão (repete com OCR só em PDF escaneado) e **descarta os modelos** após 15 min sem uso (`DOCLING_IDLE_UNLOAD_SECONDS`), devolvendo a memória ao host.
 
 Para testar sem material próprio, use `data/raw/manual-acme-ficticio.pdf` — um manual 100% inventado, gerado por script, sem vínculo com nenhuma empresa real. Depois de ingerido, experimente perguntas como “Como funciona a autenticação?” ou “O que é o método CriarPacote?”.
 
@@ -178,8 +181,9 @@ docker compose up -d --build web         # rebuild apenas do frontend (~1 min)
 | API não responde | Veja `docker compose logs api` e confirme o `.env` (principalmente `JWT_SECRET` e a chave do provedor). |
 | Primeira resposta lenta | O startup faz warm-up dos embeddings; as próximas respostas tendem a ser mais rápidas. |
 | Respostas sem fonte ou escaladas | Confirme se os documentos foram ingeridos e se aparecem no painel do Qdrant. |
-| Ingestão retorna 502 | Verifique `docker compose logs docling` e se `DOCLING_API_KEY` (API) e `DOCLING_API_KEYS` (serviço) formam o par correto. |
+| Ingestão retorna 502 | O `docling` não está de pé: suba com `docker compose --profile docling up -d` (ou um `docling-service` externo acessível em `DOCLING_URL`). Confira também se `DOCLING_API_KEY` (API) e `DOCLING_API_KEYS` (serviço) formam o par correto. |
 | Docling responde 401/503 | A key está ausente/errada ou `DOCLING_API_KEYS` não foi configurado (o serviço falha fechado). |
+| Docling consumindo muita RAM | Após a 1ª conversão os modelos ficam residentes (~1 GiB CPU-only). `DOCLING_IDLE_UNLOAD_SECONDS=900` libera por inatividade e o compose limita `mem_limit: 2g`. |
 | Frontend com tela em branco | Rebuild com `docker compose up -d --build web` e confira a URL da API no console. |
 
 ### Atalho para testar sem instalar
@@ -310,7 +314,7 @@ assistente-suporte/
 └── docker-compose.yml     # api :8002 + web :5175 + qdrant :6333 + docling :8765
 ```
 
-O Docling vive no repositório irmão **`projetos/docling-service`** (FastAPI + API key + deploy independente). Esta API só conhece o contrato HTTP `/v1/convert`.
+O Docling vive no repositório irmão **`projetos/docling-service`** (FastAPI + API key + deploy independente). Esta API só conhece o contrato HTTP `/v1/convert`. O serviço roda CPU-only (torch do índice `whl/cpu`, sem ~3 GB de libs `nvidia-*`), com OCR sob demanda, limites de memória/CPU e unload por inatividade — detalhes e medições de consumo no README do repositório irmão.
 
 ## Qualidade
 
